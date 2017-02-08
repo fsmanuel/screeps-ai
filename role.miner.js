@@ -2,17 +2,13 @@ module.exports = function() {
   const target = Game.getObjectById(this.memory.containerId);
 
   if (this.pos.isEqualTo(target.pos)) {
-    const ok = this.harvest(Game.getObjectById(this.memory.sourceId));
-
-    if (ok === OK) {
+    if (this.harvest(Game.getObjectById(this.memory.sourceId)) === OK) {
       // Drop the amount of energy that it mines in one tick
-      const energy = this.getActiveBodyparts(WORK) * 2;
-
-      this.drop(RESOURCE_ENERGY, energy);
+      this.drop(RESOURCE_ENERGY, this.getActiveBodyparts(WORK) * 2);
     }
   } else {
     this.moveTo(target, {
-      reusePath: true
+      reusePath: 10
     });
   }
 };

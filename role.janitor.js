@@ -1,22 +1,16 @@
 let actAsBuilder = require('role.builder');
 
 module.exports = function() {
-  let targetId = this.memory.targetId;
+  let target = Game.getObjectById(this.memory.targetId);
 
-  // Normal mode
-  let target = Game.getObjectById(targetId);
-
+  // Find new target
   if (!target || target.hits === target.hitsMax) {
-    let targets = this.room.find(FIND_STRUCTURES, {
-      filter: s => s.hits < s.hitsMax
+    target = this.pos.findClosestByPath(FIND_STRUCTURES, {
+      filter: s => s.hits < s.hitsMax * 0.75
     });
-    // targets.sort((a,b) => a.hits - b.hits);
 
-    if (targets.length > 0) {
-      target = targets[0];
+    if (target) {
       this.memory.targetId = target.id;
-    } else {
-      target = undefined;
     }
   }
 
