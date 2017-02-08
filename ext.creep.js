@@ -3,11 +3,12 @@ let runList = {
   harvester: require('role.harvester'),
   lorry: require('role.harvester'),
   janitor: require('role.janitor'),
-  upgrader: require('role.upgrader')
+  upgrader: require('role.upgrader'),
+  explorer: require('role.explorer')
 };
 
 let minerRun = require('role.miner');
-let explorerRun = require('role.explorer');
+let claimerRun = require('role.claimer');
 
 Creep.prototype.run = function() {
   let role = this.memory.role;
@@ -34,9 +35,9 @@ Creep.prototype.run = function() {
     return;
   }
 
-  // Explorers have special tasks
-  if (this.isRole('explorer')) {
-    explorerRun.call(this);
+  // Claimers have special tasks
+  if (this.isRole('claimer')) {
+    claimerRun.call(this);
     return;
   }
 
@@ -52,6 +53,8 @@ Creep.prototype.run = function() {
     if (['builder', 'janitor', 'upgrader'].includes(role)) {
       // Get energy from container and source
       this.getEnergy(true, false, { flag: COLOR_GREEN });
+    } else if (role === 'explorer') {
+      // Get energy from container and source
       this.getEnergy(true, true);
     } else if (role === 'harvester') {
       // Get energy from source

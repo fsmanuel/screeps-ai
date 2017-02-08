@@ -9,7 +9,18 @@ const runOrder = {
 };
 
 module.exports = {
+  // Claims are represented by BLUE flags
+  // Returns Array of Flag
+  updateClaims() {
+    this.claims = _
+      .toArray(Game.flags)
+      .filter(f => f.color === COLOR_BLUE);
+  },
+
   setup() {
+    // TODO: Find a way to run it everyTicks (we can not save it in memory!)
+    this.updateClaims();
+
     for(var name in Memory.creeps) {
       if (!Game.creeps[name]) {
         delete Memory.creeps[name];
@@ -18,9 +29,10 @@ module.exports = {
     }
   },
 
+  // Spawn
   spawn() {
     for (let name in Game.spawns) {
-      Game.spawns[name].autoSpawnCreeps();
+      Game.spawns[name].autoSpawnCreeps(this.claims);
     }
   },
 

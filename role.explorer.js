@@ -1,11 +1,15 @@
-module.exports = function() {
-  const target = Game.flags.W82N4;
+let actAsJanitor = require('role.janitor');
 
-  if (target.room) {
-    this.do('reserveController', target.room.controller);
-  } else {
+module.exports = function() {
+  // TODO: Find a flag that is not yet marked
+  let target = Game.flags.W82N4;
+
+  if (target.pos.roomName !== this.room.name) {
     this.moveTo(target, {
-      reusePath: true
+      reusePath: 10
     });
+  } else {
+    actAsJanitor.call(this);
   }
+
 };

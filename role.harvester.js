@@ -5,7 +5,19 @@ function containerWithCapacity(containers) {
 }
 
 module.exports = function() {
-  let target = this.pos.findClosestByPath(FIND_MY_STRUCTURES, {
+  let target = Game.getObjectById(this.memory.spawnId);
+
+  // Long distance (other room)
+  if (target.pos.roomName !== this.room.name) {
+    this.moveTo(target, {
+      reusePath: 10
+    });
+
+    return;
+  }
+
+  // Default (same room)
+  target = this.pos.findClosestByPath(FIND_MY_STRUCTURES, {
     filter: (s) => {
       return [
         STRUCTURE_SPAWN,
