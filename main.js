@@ -11,5 +11,9 @@ module.exports.loop = function () {
   utilLoop.setup();
   utilLoop.spawn();
   utilLoop.run();
-  utilLoop.attack();
+
+  // Defence
+  utilLoop.defendAndRepair();
+
+  // TODO: Attack!
 };

@@ -1,4 +1,8 @@
 const Logger = require('class.logger');
+const {
+  everyTicks
+} = require('util.helpers');
+
 const runOrder = {
   harvester: 1,
   lorry: 2
@@ -41,8 +45,18 @@ module.exports = {
       });
   },
 
-  // TODO: rename in defendAndRepair
-  attack() {
+  defendAndRepair() {
+    // Increase walls
+    everyTicks(300, function() {
+      // TODO: Add logic for more rooms
+      if (!Memory.maxWallHits) {
+        Memory.maxWallHits = 52000;
+      }
+
+      // TODO: revisit value
+      Memory.maxWallHits += 1000;
+    });
+
     const towers = _.filter(
       Game.structures,
       s => s.structureType === STRUCTURE_TOWER
