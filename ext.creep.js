@@ -16,8 +16,10 @@ Creep.prototype.run = function() {
 
   // TODO: Move into setupRun
   if (
-    isWorking && energy === 0 ||
-    !isWorking && energy === this.carryCapacity
+    isWorking !== undefined && (
+      isWorking && energy === 0 ||
+      !isWorking && energy === this.carryCapacity
+    )
   ) {
     if (this.memory.working === true) {
       this.memory.working = false;
@@ -42,17 +44,14 @@ Creep.prototype.run = function() {
 
   // Aka collect energy
   if (!isWorking) {
+    // Collect droped energy
+    if (this.collectDroppedEnergy() === OK) {
+      return;
+    }
 
-    // 'builder',
-    if (['janitor', 'upgrader'].includes(role)) {
-      // Collect droped energy
-      if (this.collectDroppedEnergy() == OK) {
-        return;
-      }
-
+    if (['builder', 'janitor', 'upgrader'].includes(role)) {
       // Get energy from container and source
       this.getEnergy(true, false, { flag: COLOR_GREEN });
-    } else if (role === 'builder') {
       this.getEnergy(true, true);
     } else if (role === 'harvester') {
       // Get energy from source
@@ -123,18 +122,14 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
 };
 
 Creep.prototype.collectDroppedEnergy = function() {
-  let energy = this.pos.findClosestByPath(FIND_DROPPED_ENERGY);
+  let energy = this.pos.findInRange(FIND_DROPPED_ENERGY, 3)[0];
 
   if (energy && energy.amount > 10) {
-    let structures = energy.pos.lookFor(LOOK_STRUCTURES);
-
-    if (_.isEmpty(structures.find(s => s.structureType === STRUCTURE_CONTAINER)) ) {
-      console.log('pickup', energy.amount, energy.pos);
-      return this.do('pickup', energy);
-    }
+    return this.do('pickup', energy);
   }
 };
 
+// TODO: Check if we still have bugs / problems with not moving creeps
 Creep.prototype.shouldResumeWork = function() {
   if (!this.isRole('lorry') && _.sum(this.carry) > this.carryCapacity / 2) {
     this.memory.working = true;
@@ -162,9 +157,7 @@ Creep.prototype.do = function(action, target, type = null) {
 
   // Move to target
   if (task === ERR_NOT_IN_RANGE) {
-    return this.moveTo(target, {
-      reusePath: true
-    });
+    return this.moveTo(target);
   }
 
   return task;
