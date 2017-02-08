@@ -1,6 +1,8 @@
 StructureTower.prototype.defend = function() {
   // find closes hostile creep
 
+  // TODO: If no more MOVE parts let alone and kill later
+
   // First attack HEAL
   let target = this.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
     filter: (enemy) => enemy.getActiveBodyparts(HEAL) > 0
@@ -25,7 +27,7 @@ StructureTower.prototype.defend = function() {
   if (target) {
     this.attack(target);
   } else {
-    let maxWallHits = 52000;
+    let maxWallHits = Memory.maxWallHits;
 
     // Distribute wall repais (s.hits < 255000)
     target = this.pos.findClosestByRange(FIND_STRUCTURES, {
