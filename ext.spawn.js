@@ -1,12 +1,70 @@
 const Logger = require('class.logger');
+const {
+  everyTicks
+} = require('util.helpers');
 
-let desiredPopulation =
+StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags) {
+  if (this.spawning) { return; }
+
+  const room = this.room;
+
+  // Creeps governed by the spawn
+  const creeps = _.toArray(Game.creeps)
+    .filter(c => c.memory.spawnId === this.id);
+
+  // Collect creeps statistic
+  const counts = creeps.reduce(function(data, creep) {
+    let role = creep.memory.role;
+
+    data[role] = data[role] ? data[role] + 1 : 1;
+    return data;
+  }, {});
+
+  // If no harvesters are left AND no lorries create a backup creep
+  // TODO: Maybe we should check for the room?
+  if (counts['harvester'] === 0 && counts['lorry'] === 0) {
+    return this.createCustomCreep('harvester');
+  } else {
+    // Mining
+    room
+      .find(FIND_SOURCES)
+      .forEach((source) => {
+        if (typeof this.spawnForMining(source, creeps) === 'string') {
+          return;
+        }
+      });
+  }
+
+  // Maintain default creeps population (controlled by flags)
+  _.each(this.desiredPopulation(), (max, role) => {
+    if (counts[role] < max || !counts[role]) {
+      return this.createCustomCreep(role);
+    }
+  });
+
+  // Create a claimer every 1000 ticks
+  // It's unreliable because we can miss the tick if we already spawn
+  everyTicks(1000, () => this.createCustomCreep('claimer'));
+
+  // Check for claimed rooms
+  everyTicks(10, () => {
+    // Mining
+    claimFlags
+      .reduce((sources, flag) => {
+        return sources.concat(flag.room.find(FIND_SOURCES));
+      }, [])
+      .forEach((source) => {
+        if (typeof this.spawnForMining(source, creeps) === 'string') {
+          return;
+        }
+      });
+  });
+};
 
 StructureSpawn.prototype.desiredPopulation = function() {
   const flags = this.room.find(FIND_FLAGS, {
     filter: f => f.color === COLOR_GREY && f.secondaryColor === COLOR_GREEN
   });
-
 
   let population = flags.reduce(function(data, flag) {
     let [role, amount] = flag.name.split('-');
@@ -20,57 +78,26 @@ StructureSpawn.prototype.desiredPopulation = function() {
   return population;
 };
 
-StructureSpawn.prototype.autoSpawnCreeps = function() {
-  if (this.spawning) { return; }
+StructureSpawn.prototype.spawnForMining = function(source, creeps) {
+  let container = source.containers()[0];
+  let creep;
 
-  const room = this.room;
-  // TODO: We should bind a creep to the spawn
-  const creeps = room.find(FIND_MY_CREEPS);
-
-  // Collect creeps statistic
-  // TODO: Write into memory refresh every X ticks
-  const creepsWithRole = creeps.reduce(function(data, creep) {
-    let role = creep.memory.role;
-
-    data[role] = data[role] ? data[role] + 1 : 1;
-    return data;
-  }, {});
-
-  // TODO: show every 20 ticks
-  // Logger.log(JSON.stringify(creepsWithRole));
-
-  // if no harvesters are left AND either no miners or no lorries are left
-  //  create a backup creep
-  if (creepsWithRole['harvester'] === 0 && creepsWithRole['lorry'] === 0) {
-    return this.createCustomCreep('harvester');
-  } else {
-    // check if all sources have miners and lorries
-    for (let source of room.find(FIND_SOURCES)) {
-      // check whether or not the source has a container
-      let containers = source.containers();
-
-      if (containers.length > 0) {
-        // if the source has no miner
-        if (this.spawnFor(source, containers[0], creeps, 'miner') === OK) {
-          return;
-        }
-
-        // if the source has no lorry
-        if (this.spawnFor(source, containers[0], creeps, 'lorry') === OK) {
-          return;
-        }
-      }
-    }
+  // No container => nothing to spawn
+  if (!container) {
+    return;
   }
 
-  // Maintain default creeps population
-  _.each(this.desiredPopulation(), (max, role) => {
-    // Logger.log(role, creepsWithRole[role], max, creepsWithRole[role] < max);
+  // if the source has no miner
+  creep = this.spawnFor(source, container, creeps, 'miner');
+  if (typeof creep === 'string') {
+    return creep;
+  }
 
-    if (creepsWithRole[role] < max || !creepsWithRole[role]) {
-      this.createCustomCreep(role);
-    }
-  });
+  // if the source has no lorry
+  creep = this.spawnFor(source, container, creeps, 'lorry');
+  if (typeof creep === 'string') {
+    return creep;
+  }
 };
 
 StructureSpawn.prototype.spawnFor = function(source, container, creeps, role) {
@@ -92,7 +119,7 @@ StructureSpawn.prototype.spawnFor = function(source, container, creeps, role) {
 const creepBlueprints = Object.create(null);
 
 // Explorer
-creepBlueprints.explorer = {
+creepBlueprints.claimer = {
   1: [],
   2: [],
   // 700
@@ -157,6 +184,11 @@ StructureSpawn.prototype.bodyFor = function(role) {
   if (blueprintsForRole) {
     body = creepBlueprints[role][level];
 
+    // Fallback to previous level
+    if (!body) {
+      body = creepBlueprints[role][level - 1];
+    }
+
   // Create a balanced body
   } else {
     let energyForBalancedCreep = maxEnergyForBalancedCreepMap.get(level);
@@ -193,6 +225,8 @@ const spawnErrors = new Map([
   [-14, 'ERR_RCL_NOT_ENOUGH'],
 ]);
 
+
+
 StructureSpawn.prototype.createCustomCreep = function(role, options = {}) {
   if (this.spawning) { return; }
 
@@ -200,12 +234,13 @@ StructureSpawn.prototype.createCustomCreep = function(role, options = {}) {
   const creepName = this.creepName(role);
   const memory = _.assign({
     role,
-    working: false
+    working: false,
+    spawnId: this.id
   }, options);
 
+  let msg;
   let creep;
   let canCreate = this.canCreateCreep(body, creepName);
-  let msg;
 
   // Spawn
   if (canCreate === OK) {
