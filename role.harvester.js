@@ -1,5 +1,9 @@
 let actAsBuilder = require('role.builder');
 
+function containerWithCapacity(containers) {
+  return _.find(containers, c => c.store[RESOURCE_ENERGY] < c.storeCapacity);
+}
+
 module.exports = function() {
   let target = this.pos.findClosestByPath(FIND_MY_STRUCTURES, {
     filter: (s) => {
@@ -12,13 +16,13 @@ module.exports = function() {
 
   // Towers should be refilled if they are half empty
   if (_.isEmpty(target)) {
-    // TODO: Add war mode aka factor = 1
-    let factor = 2;
+    // TODO: WAR - Add war mode aka factor = 1
+    let factor = 0.75;
 
     target = this.pos.findClosestByPath(FIND_MY_STRUCTURES, {
       filter: (s) => {
         return s.structureType === STRUCTURE_TOWER &&
-          s.energy < s.energyCapacity / factor;
+          s.energy < s.energyCapacity * factor;
       }
     });
   }
@@ -29,26 +33,18 @@ module.exports = function() {
   }
 
   // Do we have a container next to the spawn
+  // TODO: Revisit when we have 2 spawns
   if (_.isEmpty(target)) {
     let spawns = this.room.find(FIND_STRUCTURES, {
       filter: s => s.structureType === STRUCTURE_SPAWN
     });
-    let containers = spawns[0].containers();
 
-    target = _.find(
-      containers,
-      (s) => s.store[RESOURCE_ENERGY] < s.storeCapacity
-    );
+    target = containerWithCapacity(spawns[0].containers());
   }
 
   // Do we have a container next to the controller
   if (_.isEmpty(target)) {
-    let containers = this.room.controller.containers();
-
-    target = _.find(
-      containers,
-      (s) => s.store[RESOURCE_ENERGY] < s.storeCapacity
-    );
+    target = containerWithCapacity(this.room.controller.containers());
   }
 
   // if we have a target lets transfer
