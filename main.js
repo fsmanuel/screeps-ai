@@ -9,11 +9,15 @@ let utilLoop = require('util.loop');
 
 module.exports.loop = function () {
   utilLoop.setup();
-  utilLoop.spawn();
+
+  // Keep the economy running!
   utilLoop.run();
 
-  // Defence
+  // Defend our world...
   utilLoop.defendAndRepair();
 
   // TODO: Attack!
+
+  // TODO: We should probably spawn at the end of the tick?!
+  utilLoop.spawn();
 };

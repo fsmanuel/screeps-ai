@@ -6,7 +6,7 @@ module.exports = function() {
   // Find new target
   if (!target || target.hits === target.hitsMax) {
     target = this.pos.findClosestByPath(FIND_STRUCTURES, {
-      filter: s => s.hits < s.hitsMax * 0.75
+      filter: s => s.hits < s.hitsMax * 0.9
     });
 
     if (target) {

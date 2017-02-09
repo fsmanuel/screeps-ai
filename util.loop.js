@@ -9,38 +9,29 @@ const runOrder = {
 };
 
 module.exports = {
-  // Claims are represented by BLUE flags
-  // Returns Array of Flag
-  updateClaims() {
-    this.claims = _
-      .toArray(Game.flags)
-      .filter(f => f.color === COLOR_BLUE);
-  },
-
   setup() {
+    // Convert flags to an array
+    this.flagsToArray();
+
     // TODO: Find a way to run it everyTicks (we can not save it in memory!)
     this.updateClaims();
 
-    for(var name in Memory.creeps) {
-      if (!Game.creeps[name]) {
-        delete Memory.creeps[name];
-        Logger.log('Clearing non-existing creep memory:', name);
-      }
-    }
+    // If enemies are detected set flags
+    // TODO: We can do it every 5 ticks
+    this.setDefenseFlags();
+
+    // Cleanup memory
+    this.cleanup();
   },
 
   // Spawn
   spawn() {
     for (let name in Game.spawns) {
-      Game.spawns[name].autoSpawnCreeps(this.claims);
+      Game.spawns[name].autoSpawnCreeps(this.claims, this.defendFlags);
     }
   },
 
   run() {
-    // let ok = Game.creeps.Hailey
-    //   .do('reserveController', Game.flags.W82N4.room.controller);
-    // console.log(ok);
-
     // We sort the creeps by role via runOrder
     _
       .values(Game.creeps)
@@ -61,6 +52,7 @@ module.exports = {
     // Increase walls
     everyTicks(300, function() {
       // TODO: Add logic for more rooms
+      // TODO: Add logic for level
       if (!Memory.maxWallHits) {
         Memory.maxWallHits = 52000;
       }
@@ -76,6 +68,33 @@ module.exports = {
 
     for (let tower of towers) {
       tower.defend();
+    }
+  },
+
+  // Helper
+  flagsToArray() {
+    this.flags = _.toArray(Game.flags);
+  },
+
+  // Claims are represented by BLUE flags
+  // Returns Array of Flag
+  updateClaims() {
+    this.claims = this.flags.filter(f => f.color === COLOR_BLUE);
+  },
+
+  // Defense are represented by RED flags
+  setDefenseFlags() {
+    this.claims.forEach(flag => flag.pos.setDefenseFlag());
+
+    this.defendFlags = this.flags.filter(f => f.color === COLOR_RED);
+  },
+
+  cleanup() {
+    for(var name in Memory.creeps) {
+      if (!Game.creeps[name]) {
+        delete Memory.creeps[name];
+        Logger.log('Clearing non-existing creep memory:', name);
+      }
     }
   }
 };

@@ -1,39 +1,58 @@
 const Logger = require('class.logger');
 const {
-  everyTicks
+  everyTicks,
+  generateId
 } = require('util.helpers');
 
-StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags) {
+StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags) {
   if (this.spawning) { return; }
 
   const room = this.room;
 
   // Creeps governed by the spawn
-  const creeps = _.toArray(Game.creeps)
+  this.creeps = _.toArray(Game.creeps)
     .filter(c => c.memory.spawnId === this.id);
 
   // Collect creeps statistic
-  const counts = creeps.reduce(function(data, creep) {
+  const counts = this.creeps.reduce(function(data, creep) {
     let role = creep.memory.role;
 
     data[role] = data[role] ? data[role] + 1 : 1;
     return data;
   }, {});
 
+  // We run it every 2 ticks to spawn other creeps as well
+  everyTicks(2, () => {
+    if (!_.isEmpty(defendFlags)) {
+      defendFlags.forEach((flag) => {
+        let options = {
+          flagName: flag.name
+        };
+
+        creep = this.spawnFor('defender', options, 3);
+        if (typeof creep === 'string') {
+          return creep;
+        }
+      });
+
+      console.log('Ui! We have to defend our selfs');
+    }
+  });
+
   // If no harvesters are left AND no lorries create a backup creep
   // TODO: Maybe we should check for the room?
   if (counts['harvester'] === 0 && counts['lorry'] === 0) {
     return this.createCustomCreep('harvester');
-  } else {
-    // Mining
-    room
-      .find(FIND_SOURCES)
-      .forEach((source) => {
-        if (typeof this.spawnForMining(source, creeps) === 'string') {
-          return;
-        }
-      });
   }
+
+  // Mining
+  room
+    .find(FIND_SOURCES)
+    .forEach((source) => {
+      if (typeof this.spawnForMining(source) === 'string') {
+        return;
+      }
+    });
 
   // Maintain default creeps population (controlled by flags)
   _.each(this.desiredPopulation(), (max, role) => {
@@ -54,7 +73,7 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags) {
         return sources.concat(flag.room.find(FIND_SOURCES));
       }, [])
       .forEach((source) => {
-        if (typeof this.spawnForMining(source, creeps) === 'string') {
+        if (typeof this.spawnForMining(source, 2) === 'string') {
           return;
         }
       });
@@ -78,38 +97,44 @@ StructureSpawn.prototype.desiredPopulation = function() {
   return population;
 };
 
-StructureSpawn.prototype.spawnForMining = function(source, creeps) {
-  let container = source.containers()[0];
+StructureSpawn.prototype.spawnForMining = function(source, lorriesCount) {
   let creep;
+  let container = source.containers()[0];
 
   // No container => nothing to spawn
   if (!container) {
     return;
   }
 
+  let options = {
+    sourceId: source.id,
+    containerId: container.id
+  };
+
   // if the source has no miner
-  creep = this.spawnFor(source, container, creeps, 'miner');
+  creep = this.spawnFor('miner', options);
   if (typeof creep === 'string') {
     return creep;
   }
 
   // if the source has no lorry
-  creep = this.spawnFor(source, container, creeps, 'lorry');
+  creep = this.spawnFor('lorry', options, lorriesCount);
   if (typeof creep === 'string') {
     return creep;
   }
 };
 
-StructureSpawn.prototype.spawnFor = function(source, container, creeps, role) {
-  let hasCreep = _.some(creeps, c => {
-    return c.memory.role === role && c.memory.sourceId === source.id;
-  });
+StructureSpawn.prototype.spawnFor = function(role, options, limit = 1) {
+  let keys = Object.keys(options);
 
-  if (!hasCreep) {
-    return this.createCustomCreep(role, {
-      sourceId: source.id,
-      containerId: container.id
-    });
+  // We apply all options to the filter
+  let creeps = this
+    .creeps
+    .filter(c => c.memory.role === role)
+    .filter(c => keys.map(k => c.memory[k] === options[k]).every(v => v))
+
+  if (creeps.length < limit) {
+    return this.createCustomCreep(role, options);
   }
 };
 
@@ -118,7 +143,7 @@ StructureSpawn.prototype.spawnFor = function(source, container, creeps, role) {
 //       regenerate every X ticks or use the regeneration of the global
 const creepBlueprints = Object.create(null);
 
-// Explorer
+// Claimer
 creepBlueprints.claimer = {
   1: [],
   2: [],
@@ -126,6 +151,25 @@ creepBlueprints.claimer = {
   3: [CLAIM,MOVE,MOVE],
   // 1300
   4: [CLAIM,CLAIM,MOVE,MOVE]
+};
+
+// Defender
+creepBlueprints.defender = {
+  1: [],
+  2: [],
+  // 390
+  3: [
+    ATTACK, ATTACK, ATTACK,
+    MOVE,   MOVE,   MOVE
+  ],
+  // 810
+  4: [
+    TOUGH,  TOUGH,  TOUGH,
+    ATTACK, ATTACK, ATTACK,
+    ATTACK, ATTACK, ATTACK,
+    MOVE,   MOVE,   MOVE,
+    MOVE,   MOVE,   MOVE
+  ]
 };
 
 // Lorry
@@ -232,6 +276,8 @@ StructureSpawn.prototype.createCustomCreep = function(role, options = {}) {
 
   const body = this.bodyFor(role);
   const creepName = this.creepName(role);
+  // TODO: Only set working property if needed
+  // not for claimer, defender and miner
   const memory = _.assign({
     role,
     working: false,
@@ -247,21 +293,19 @@ StructureSpawn.prototype.createCustomCreep = function(role, options = {}) {
     msg = 'Spawning new ' + role + ': ' + creepName;
     creep = this.createCreep(body, creepName, memory);
 
-  // Error message
-  } else {
-    let error = spawnErrors.get(canCreate);
-    msg = `Can not spawn new ${role}: ${creepName} (Error: ${error})`;
+    // body,
+    Logger.log(msg, JSON.stringify(memory));
   }
 
-  Logger.log(msg, body, JSON.stringify(memory));
+  // Error message
+  // } else {
+  //   let error = spawnErrors.get(canCreate);
+  //   msg = `Can not spawn new ${role}: ${creepName} (Error: ${error})`;
+  // }
 
   return creep;
 };
 
 StructureSpawn.prototype.creepName = function(type) {
   return `${type}-${generateId()}`;
-}
-
-function generateId() {
-  return Math.random().toString(32).slice(2).substr(0, 4);
 }

@@ -7,13 +7,34 @@ let runList = {
   explorer: require('role.explorer')
 };
 
-let minerRun = require('role.miner');
 let claimerRun = require('role.claimer');
+let defenderRun = require('role.defender');
+let minerRun = require('role.miner');
 
 Creep.prototype.run = function() {
   let role = this.memory.role;
   let isWorking = this.memory.working;
   let energy = this.carry.energy;
+
+  // This roles have special tasks and don't need the working flag
+
+  // Defender - Run for it!
+  if (this.isRole('defender')) {
+    defenderRun.call(this);
+    return;
+  }
+
+  // Claimers have special tasks
+  if (this.isRole('claimer')) {
+    claimerRun.call(this);
+    return;
+  }
+
+  // Minors don't use the working flag because they don't need energy
+  if (this.isRole('miner')) {
+    minerRun.call(this);
+    return;
+  }
 
   // TODO: Move into setupRun
   if (
@@ -27,18 +48,6 @@ Creep.prototype.run = function() {
     } else {
       this.memory.working = true;
     }
-  }
-
-  // Minors don't use the working flag because they don't need energy
-  if (this.isRole('miner')) {
-    minerRun.call(this);
-    return;
-  }
-
-  // Claimers have special tasks
-  if (this.isRole('claimer')) {
-    claimerRun.call(this);
-    return;
   }
 
   // console.log(role, isWorking);
