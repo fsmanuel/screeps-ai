@@ -1,5 +1,6 @@
 // Extends
 require('ext.creep');
+require('ext.room');
 require('ext.room-object');
 require('ext.room-position');
 require('ext.spawn');
