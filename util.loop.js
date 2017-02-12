@@ -90,11 +90,13 @@ module.exports = {
   },
 
   cleanup() {
-    for(var name in Memory.creeps) {
-      if (!Game.creeps[name]) {
-        delete Memory.creeps[name];
-        Logger.log('Clearing non-existing creep memory:', name);
-      }
-    }
+    Object
+      .keys(Memory.creeps)
+      .forEach((creep) => {
+        if (!Game.creeps[creep]) {
+          delete Memory.creeps[creep];
+          // Logger.log('Clearing non-existing creep memory:', creep);
+        }
+      });
   }
 };
