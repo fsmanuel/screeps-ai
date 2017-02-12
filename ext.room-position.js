@@ -20,8 +20,9 @@ RoomPosition.prototype.findEnemies = function() {
 RoomPosition.prototype.setDefenseFlag = function() {
   // Check if there is a RED flag
   let flag = this.findClosestFlag(COLOR_RED);
+  let enemies = this.findEnemies();
 
-  if (!flag && this.findEnemies()) {
+  if (!flag && enemies) {
     let flagName = `attack-${generateId()}`;
     this.createFlag(flagName, COLOR_RED);
 
@@ -31,7 +32,7 @@ RoomPosition.prototype.setDefenseFlag = function() {
     );
 
   // Cleanup
-  } else if (flag) {
+  } else if (flag && !enemies) {
     flag.remove();
 
     Logger.log(`The enemy is defeated!`);
