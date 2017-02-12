@@ -26,6 +26,14 @@ module.exports = {
 
   // Spawn
   spawn() {
+    // Collect creeps population governed by the spawn aka census
+    Object
+      .keys(Game.spawns)
+      .forEach((spawn) => {
+        Game.spawns[spawn].collectCreepsData();
+      });
+
+    // Then we autoSpawnCreeps
     for (let name in Game.spawns) {
       Game.spawns[name].autoSpawnCreeps(this.claims, this.defendFlags);
     }
