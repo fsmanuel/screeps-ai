@@ -1,11 +1,11 @@
 let actAsUpgrader = require('role.upgrader');
 
-module.exports = function() {
+module.exports = function(autoPilot) {
   let target;
 
   // Build
   // This strategy is for efficiency
-  if (Game.flags.autoPilot) {
+  if (autoPilot) {
     target = this.pos.findClosestByPath(FIND_CONSTRUCTION_SITES);
 
   // This strategy is for user control
