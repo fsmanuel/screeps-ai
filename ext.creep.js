@@ -1,7 +1,7 @@
 let runList = {
   builder: require('role.builder'),
-  harvester: require('role.harvester'),
-  lorry: require('role.harvester'),
+  logistics: require('role.logistics'),
+  lorry: require('role.logistics'),
   upgrader: require('role.upgrader'),
   explorer: require('role.explorer')
 };
@@ -64,7 +64,7 @@ Creep.prototype.run = function() {
     } else if (role === 'explorer') {
       // Get energy from container and source
       this.getEnergy(true, true);
-    } else if (role === 'harvester') {
+    } else if (role === 'logistics') {
       // Get energy from source
       this.getEnergy(false, true);
     } else if (role === 'lorry') {
@@ -85,6 +85,7 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
 
   // if the Creep should look for containers
   if (useContainer) {
+    // Aka lorries
     if (options.containerId) {
       container = Game.getObjectById(options.containerId);
     } else {
@@ -98,18 +99,21 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
         }
       });
 
-      if (!_.isEmpty(container) && options.flag) {
-        flag = container.pos.findClosestFlag(options.flag);
-
-        if (flag && !flag.pos.isEqualTo(container.pos)) {
+      // If we should use a flagged container but there is no flag
+      if (
+        !_.isEmpty(container) && options.flag &&
+        !container.hasFlag(options.flag)
+      ) {
           container = undefined;
-        }
       }
     }
 
     // if one was found
     if (!_.isEmpty(container)) {
-      if (this.memory.role === 'lorry') {
+
+      // Move lorries to YELLOW flags (next to containers)
+      if (this.isRole('lorry')) {
+        // TODO: We should use findInReach()
         flag = container.pos.findClosestFlag(COLOR_YELLOW);
 
         if (flag && !this.pos.isEqualTo(flag.pos)) {
@@ -117,11 +121,12 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
         }
       }
 
+      // Done!
       this.do('withdraw', container, RESOURCE_ENERGY);
     }
   }
 
-  // if no container was found and the Creep should look for Sources
+  // if no container was found and the creep should look for sources
   if (_.isEmpty(container) && useSource) {
     // find closest source
     this.do('harvest', this.pos.findClosestByPath(FIND_SOURCES_ACTIVE));
@@ -156,7 +161,7 @@ Creep.prototype.do = function(action, target, type = null) {
     return this.shouldResumeWork();
   }
 
-  // Enqueue harvester
+  // Enqueue logistics, miners and explorers
   if (action === 'harvest' && task === ERR_INVALID_TARGET) {
     let flag = this.pos.findClosestFlag(COLOR_YELLOW, COLOR_GREEN);
     let path = this.pos.findPathTo(flag);

@@ -4,7 +4,7 @@ const {
 } = require('util.helpers');
 
 const runOrder = {
-  harvester: 1,
+  logistics: 1,
   lorry: 2
 };
 
