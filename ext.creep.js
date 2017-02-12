@@ -2,7 +2,6 @@ let runList = {
   builder: require('role.builder'),
   harvester: require('role.harvester'),
   lorry: require('role.harvester'),
-  janitor: require('role.janitor'),
   upgrader: require('role.upgrader'),
   explorer: require('role.explorer')
 };
@@ -59,7 +58,7 @@ Creep.prototype.run = function() {
       return;
     }
 
-    if (['builder', 'janitor', 'upgrader'].includes(role)) {
+    if (['builder', 'upgrader'].includes(role)) {
       // Get energy from container and source
       this.getEnergy(true, false, { flag: COLOR_GREEN });
     } else if (role === 'explorer') {
