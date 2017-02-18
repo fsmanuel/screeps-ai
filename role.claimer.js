@@ -3,7 +3,7 @@ module.exports = function() {
   const isNearTo = this.pos.isNearTo(target.pos);
 
   // The first claimer marks the flag as a colony of the spawn
-  if (isNearTo && !target.memory) {
+  if (isNearTo && _.isEmpty(target.memory)) {
     target.memory.spawnId = this.memory.spawnId;
   }
 

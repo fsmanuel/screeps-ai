@@ -36,7 +36,7 @@ module.exports = function() {
 
   // Do we have a container next to the spawn
   // TODO: Revisit when we have 2 spawns
-  if (_.isEmpty(target)) {
+  if (_.isEmpty(target) && this.room.hasSpawns()) {
     let spawn = this.room.spawns()[0];
 
     target = containerWithCapacity(spawn.nearContainers());
@@ -54,6 +54,21 @@ module.exports = function() {
   // Get back to home spawn
   if (_.isEmpty(target)) {
     let spawn = Game.getObjectById(this.memory.spawnId);
+
+    // Find the room
+    if (spawn && spawn.pos.roomName !== this.room.name) {
+      this.moveTo(spawn, {
+        reusePath: 10
+      });
+
+      return;
+    }
+  }
+
+  // Support home spawn
+  if (_.isEmpty(target)) {
+    let spawn = Game.getObjectById(this.memory.spawnId);
+    spawn = Game.getObjectById(spawn.memory.spawnId);
 
     // Find the room
     if (spawn && spawn.pos.roomName !== this.room.name) {

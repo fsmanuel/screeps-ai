@@ -1,5 +1,15 @@
 let actAsUpgrader = require('role.upgrader');
 
+// TODO: If you are working leave the street
+// this.rememberTo(
+//   () => this.moveAwayFromStreet();
+//   !this.hasMoved(),
+//   {
+//     key: 'noMove',
+//     limit: 3
+//   }
+// );
+
 module.exports = function(autoPilot) {
   let target;
 
