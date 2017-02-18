@@ -10,6 +10,12 @@ let claimerRun = require('role.claimer');
 let defenderRun = require('role.defender');
 let minerRun = require('role.miner');
 
+const {
+  rememberTo
+} = require('util.helpers');
+
+Creep.prototype.rememberTo = rememberTo;
+
 Creep.prototype.run = function() {
   let role = this.memory.role;
   let isWorking = this.memory.working;
@@ -58,17 +64,21 @@ Creep.prototype.run = function() {
       return;
     }
 
+    // Get energy from container and source
     if (['builder', 'upgrader'].includes(role)) {
-      // Get energy from container and source
       this.getEnergy(true, false, { flag: COLOR_GREEN });
+
+    // Get energy from container and source
+    // TODO: It should take the closest!
     } else if (role === 'explorer') {
-      // Get energy from container and source
       this.getEnergy(true, true);
+
+    // Get energy from source
     } else if (role === 'logistics') {
-      // Get energy from source
       this.getEnergy(false, true);
+
+    // Get energy from container
     } else if (role === 'lorry') {
-      // Get energy from container
       this.getEnergy(true, false, { containerId: this.memory.containerId });
     }
   }
@@ -81,31 +91,32 @@ Creep.prototype.run = function() {
 
 Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
   let container;
-  let flag;
 
   // if the Creep should look for containers
   if (useContainer) {
+    let { flag } = options;
+
     // Aka lorries
     if (options.containerId) {
       container = Game.getObjectById(options.containerId);
+
+    // find closest container
     } else {
-      // find closest container
       container = this.pos.findClosestByPath(FIND_STRUCTURES, {
         filter: (s) => {
-          return [
-            STRUCTURE_CONTAINER,
-            STRUCTURE_STORAGE
-          ].includes(s.structureType) && s.store[RESOURCE_ENERGY] > 0;
+          let match = [
+              STRUCTURE_CONTAINER,
+              STRUCTURE_STORAGE
+            ].includes(s.structureType) && s.store[RESOURCE_ENERGY] > 0;
+
+          // If we should use a flagged container
+          if (options.flag) {
+            return match && s.hasFlag(options.flag);
+          } else {
+            return match;
+          }
         }
       });
-
-      // If we should use a flagged container but there is no flag
-      if (
-        !_.isEmpty(container) && options.flag &&
-        !container.hasFlag(options.flag)
-      ) {
-          container = undefined;
-      }
     }
 
     // if one was found
@@ -114,9 +125,9 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
       // Move lorries to YELLOW flags (next to containers)
       if (this.isRole('lorry')) {
         // TODO: We should use findInReach()
-        flag = container.pos.findClosestFlag(COLOR_YELLOW);
+        let yellowFlag = container.pos.findClosestFlag(COLOR_YELLOW);
 
-        if (flag && !this.pos.isEqualTo(flag.pos)) {
+        if (yellowFlag && !this.pos.isEqualTo(yellowFlag.pos)) {
           this.moveTo(flag);
         }
       }
@@ -163,12 +174,7 @@ Creep.prototype.do = function(action, target, type = null) {
 
   // Enqueue logistics, miners and explorers
   if (action === 'harvest' && task === ERR_INVALID_TARGET) {
-    let flag = this.pos.findClosestFlag(COLOR_YELLOW, COLOR_GREEN);
-    let path = this.pos.findPathTo(flag);
-
-    if (path.length > 0) {
-      return this.move(path[0].direction);
-    }
+    return this.moveTo(target);
   }
 
   // Move to target
