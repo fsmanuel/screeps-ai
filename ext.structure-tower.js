@@ -1,10 +1,16 @@
+
+// Energy control
+StructureTower.prototype.engergyFactor = 0.75; // 0.25 0.75
+
 StructureTower.prototype.defend = function() {
   // find closes hostile creep
 
   // TODO: If no more MOVE parts let alone and kill later
 
-  // First attack HEAL
-  let target = this.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
+  let target;
+
+  // First attack HEAL (TODO: can be dangerous)
+  target = this.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
     filter: (enemy) => enemy.getActiveBodyparts(HEAL) > 0
   });
 
@@ -27,11 +33,14 @@ StructureTower.prototype.defend = function() {
   if (target) {
     this.attack(target);
   } else {
-    let maxWallHits = Memory.maxWallHits;
+    let maxWallHits = this.room.memory.maxWallHits;
 
     // Distribute wall repais (s.hits < 255000)
     target = this.pos.findClosestByRange(FIND_STRUCTURES, {
       filter: (s) => {
+        // TODO: STRUCTURE_RAMPART should be prioritized - maybe we should switch under the maxWallHits until they reach a sustainable limit
+        // return s.structureType === STRUCTURE_RAMPART && s.hits < maxWallHits
+
         if ([
           STRUCTURE_RAMPART,
           STRUCTURE_WALL
