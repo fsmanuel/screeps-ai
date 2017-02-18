@@ -19,21 +19,33 @@ RoomPosition.prototype.findEnemies = function() {
 
 RoomPosition.prototype.setDefenseFlag = function() {
   // Check if there is a RED flag
-  let flag = this.findClosestFlag(COLOR_RED);
+  let flag = this.findClosestByRange(FIND_FLAGS, {
+    filter: s => s.color === COLOR_RED
+  });
   let enemies = this.findEnemies();
 
+  // Setup first strike
   if (!flag && enemies) {
     let flagName = `attack-${generateId()}`;
     this.createFlag(flagName, COLOR_RED);
+  }
 
+  // Reenable if enemies are arround
+  if (flag && flag.secondaryColor === COLOR_GREEN && enemies) {
+    flag.setColor(COLOR_RED, COLOR_RED);
+  }
+
+  // Log if we have enemies
+  if (flag && flag.secondaryColor === COLOR_RED) {
     Logger.log(
       `We are under attack!`,
-      JSON.stringify(Game.flags[flagName].pos)
+      JSON.stringify(Game.flags[flag.name].pos)
     );
+  }
 
   // Cleanup
-  } else if (flag && !enemies) {
-    flag.remove();
+  if (flag && flag.secondaryColor !== COLOR_GREEN && !enemies) {
+    flag.setColor(COLOR_RED, COLOR_GREEN);
 
     Logger.log(`The enemy is defeated!`);
   }

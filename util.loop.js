@@ -18,7 +18,7 @@ module.exports = {
 
     // If enemies are detected set flags
     // TODO: We can do it every 5 ticks
-    this.setDefenseFlags();
+    everyTicks(2, () => this.setDefenseFlags());
 
     // Cleanup memory
     this.cleanup();
@@ -57,26 +57,41 @@ module.exports = {
   },
 
   defendAndRepair() {
-    // Increase walls
-    everyTicks(300, function() {
-      // TODO: Add logic for more rooms
-      // TODO: Add logic for level
-      if (!Memory.maxWallHits) {
-        Memory.maxWallHits = 52000;
-      }
+    // Memory.maxWallHits = 350000;
 
-      // TODO: revisit value
-      Memory.maxWallHits += 1000;
+    // Increase walls
+    everyTicks(400, function() {
+      // TODO: Should be limited to spawns with walls and min one tower
+      _
+        .toArray(Game.spawns)
+        // TODO: Filter for main spawns (!memory.slave)
+        .forEach((spawn) => {
+
+          // TODO: Revisit value
+          // TODO: Pick the right start. It should be arround or a bit over a container
+          if (!spawn.room.memory.maxWallHits) {
+            spawn.room.memory.maxWallHits = 350000;
+          }
+
+          // TODO: I guess from level 3-5 1000 was a good thing
+          // TODO: if we are on level 5 with the controller in the room we should increase to 1000-2000
+          spawn.room.memory.maxWallHits += 1000;
+          Logger.log(
+            'Increased walls:',
+            spawn.room.name,
+            spawn.room.memory.maxWallHits
+          );
+        });
     });
 
-    const towers = _.filter(
-      Game.structures,
-      s => s.structureType === STRUCTURE_TOWER
-    );
-
-    for (let tower of towers) {
-      tower.defend();
-    }
+    _
+      .toArray(Game.structures)
+      .filter(s => s.structureType === STRUCTURE_TOWER)
+      .forEach((tower) => {
+        // TODO: WAR - Add war mode aka factor = 1
+        // TODO: If the energy level is too low set to 0.25 or 0 (collect from rooms)
+        tower.defend()
+      });
   },
 
   // Helper
@@ -92,9 +107,16 @@ module.exports = {
 
   // Defense are represented by RED flags
   setDefenseFlags() {
-    this.claims.forEach(flag => flag.pos.setDefenseFlag());
+    this.claims.forEach((flag) => {
+      // console.log(JSON.stringify(flag.room));
+      if (flag.room) {
+        flag.pos.setDefenseFlag();
+      }
+    });
 
-    this.defendFlags = this.flags.filter(f => f.color === COLOR_RED);
+    this.defendFlags = this.flags.filter((f) => {
+      return f.color === COLOR_RED && f.secondaryColor === COLOR_RED;
+    });
   },
 
   cleanup() {
