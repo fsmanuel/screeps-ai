@@ -1,8 +1,12 @@
 const Logger = require('class.logger');
 const {
   everyTicks,
-  generateId
+  generateId,
+  rememberTo,
+  rememberToFor
 } = require('util.helpers');
+
+StructureSpawn.prototype.rememberToFor = rememberToFor;
 
 // The autoSpawn
 // TODO: think about what role needs to be checked every X ticks!
@@ -77,19 +81,21 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags) {
 StructureSpawn.prototype.maintainSurvival = function() {
   const counts = this.creepsCounts;
 
-  if (counts['logistics'] === 0 && counts['lorry'] === 0) {
+
+  // TODO: We have a problem if 2 lorries are in another room!! We kill ourselfs!
+  if (!counts['logistics'] && !counts['lorry']) {
     // TODO: Use spawnFor?
     return this.createCustomCreep('logistics');
   }
 
   // If we have a RED flag but no defenders and no tower we help our selfs
-  if (
-    this.hasFlag(COLOR_RED) &&
-    counts['defender'] === 0 &&
-    !this.room.hasTowers()
-  ) {
-    return this.spawnFor('defender');
-  }
+  // if (
+  //   this.hasFlag(COLOR_RED) &&
+  //   counts['defender'] === 0 &&
+  //   !this.room.hasTowers()
+  // ) {
+  //   return this.spawnFor('defender');
+  // }
 };
 
 // Military complex
@@ -102,10 +108,20 @@ StructureSpawn.prototype.militaryComplex = function(defendFlags) {
       .reduce((creep, flag) => {
         if (creep) { return creep; }
 
+        // TODO: make it dependend on the enemeies
+        let limit = 2;
         let options = { flagName: flag.name };
 
-        // TODO: make it dependend on the enemeies
-        return this.spawnFor('defender', options, 2);
+        let defenders = flag.room.find(FIND_MY_CREEPS, {
+          filter: c => c.isRole('defender')
+        });
+
+        // If we already have enough defenders in the room
+        if (defenders.length >= limit) {
+          limit = 0;
+        }
+
+        return this.spawnFor('defender', options, limit);
       }, undefined);
 
     console.log('Ui! We have to defend our selfs');
@@ -114,12 +130,17 @@ StructureSpawn.prototype.militaryComplex = function(defendFlags) {
 
 // Mining (max 2 sources = 2 loops)
 StructureSpawn.prototype.maintainLocalMining = function() {
+  let limits = {
+    miner: 1,
+    lorry: 1
+  };
+
   return this.room
     .find(FIND_SOURCES)
     .reduce((creep, source) => {
       if (creep) { return creep; }
 
-      return this.spawnForMining(source);
+      return this.spawnForMining(source, limits);
     }, undefined);
 };
 
@@ -128,6 +149,21 @@ StructureSpawn.prototype.maintainLocalMining = function() {
 // TODO: if we have a local explorer we should decrease limit by 1
 StructureSpawn.prototype.maintainLocalBuilder = function() {
   let limit = 1;
+
+  let constructionSites = this.room.find(FIND_CONSTRUCTION_SITES);
+
+  // Only spawn if we have construction sites
+  if (_.isEmpty(constructionSites)) {
+    limit = 0;
+  } else {
+    // Increase if we have 4 or more construction sites
+    if (constructionSites.length > 3) {
+      limit += 1;
+    }
+
+    // console.log(constructionSites.length, JSON.stringify(constructionSites));
+  }
+
   return this.spawnFor('builder', {}, limit);
 };
 
@@ -173,6 +209,9 @@ StructureSpawn.prototype.maintainLocalUpgrader = function() {
     // In level 5 the best limit is 2 maybe we can increase on level 6
     limit = 2;
   }
+  if (level > 4) {
+    limit = 4;
+  }
 
   return this.spawnFor('upgrader', {}, limit);
 };
@@ -190,10 +229,16 @@ StructureSpawn.prototype.claimColonies = function(claimFlags) {
         if (creep) { return creep; }
 
         // If the flag is owned by another spawn we don't care
-        if (flag.memory.spawnId !== this.id) { return creep; }
+        if (flag.memory.spawnId && flag.memory.spawnId !== this.id) {
+          return creep;
+        }
 
         // If the controller is claimed we don't care
-        if (flag.room.controller.my && !flag.room.controller.reservation) {
+        if (
+          flag.room &&
+          flag.room.controller.my &&
+          !flag.room.controller.reservation
+        ) {
           return creep;
         }
 
@@ -204,7 +249,7 @@ StructureSpawn.prototype.claimColonies = function(claimFlags) {
           limit = 1;
         }
 
-        return this.spawnFor('claimer', options);
+        return this.spawnFor('claimer', options, limit);
       }, undefined);
   });
 };
@@ -215,6 +260,7 @@ StructureSpawn.prototype.maintainRemoteExplorer = function(claimFlags) {
     return claimFlags
       .reduce((creep, flag) => {
         if (creep) { return creep; }
+        if (!flag.room) { return creep; }
 
         let limit = 1;
         let options = { flagName: flag.name };
@@ -246,6 +292,7 @@ StructureSpawn.prototype.maintainRemoteMining = function(claimFlags) {
     return claimFlags
       .reduce((creep, flag) => {
         if (creep) { return creep; }
+        if (!flag.room) { return creep; }
 
         let limits = {
           miner: 1,
@@ -297,6 +344,11 @@ StructureSpawn.prototype.collectCreepsData = function() {
     data[role] = data[role] ? data[role] + 1 : 1;
     return data;
   }, {});
+
+  // Show population per spawn
+  everyTicks(100, () => {
+    Logger.log(this.name, JSON.stringify(this.creepsCounts));
+  });
 };
 
 // Mining
@@ -315,6 +367,18 @@ StructureSpawn.prototype.spawnForMining = function(source, limits = {}) {
   // if the source has no miner
   creep = this.spawnFor('miner', options, limits.miner);
   if (creep) { return creep; }
+
+  // TODO: To make it more efficient for remote containers we need to call this more often, change the limit. But first we need to know if we are local or remote!
+  // if the container is at max capacity for 200 ticks
+  this.rememberToFor(
+    () => limits.lorry += 1,
+    container.isFullOf(RESOURCE_ENERGY),
+    {
+      key: 'containerNeedsLorryCount',
+      id: container.id,
+      limit: 200
+    }
+  );
 
   // if the source has no lorry
   creep = this.spawnFor('lorry', options, limits.lorry);
@@ -341,93 +405,8 @@ StructureSpawn.prototype.spawnFor = function(role, options = {}, limit = 1) {
 };
 
 // Blueprints
-// TODO: Move into own file
-// TODO: make it dependent on the energy
-//       regenerate every X ticks or use the regeneration of the global
-// TODO: move into config file
+// Usefull for developing new roles
 const creepBlueprints = Object.create(null);
-
-// Claimer
-creepBlueprints.claimer = {
-  1: [],
-  2: [],
-  // 700
-  3: [CLAIM,MOVE,MOVE],
-  // 1300
-  4: [CLAIM,CLAIM,MOVE,MOVE],
-  // 1300
-  5: [CLAIM,CLAIM,MOVE,MOVE]
-};
-
-// Defender
-creepBlueprints.defender = {
-  1: [],
-  2: [],
-  // 390
-  3: [
-    ATTACK, ATTACK, ATTACK,
-    MOVE,   MOVE,   MOVE
-  ],
-  // 810
-  4: [
-    TOUGH,  TOUGH,  TOUGH,
-    ATTACK, ATTACK, ATTACK, ATTACK,
-    MOVE,   MOVE,   MOVE,   MOVE,
-    MOVE,   MOVE
-  ],
-  // 810
-  5: [
-    TOUGH,  TOUGH,  TOUGH,
-    ATTACK, ATTACK, ATTACK, ATTACK,
-    MOVE,   MOVE,   MOVE,   MOVE,
-    MOVE,   MOVE
-  ]
-};
-
-// Lorry
-creepBlueprints.lorry = {
-  1: [],
-  // 450
-  2: [
-    CARRY, CARRY, CARRY,
-    CARRY, CARRY, CARRY,
-    MOVE,  MOVE,  MOVE
-  ],
-  // 600
-  3: [
-    CARRY, CARRY, CARRY, CARRY,
-    CARRY, CARRY, CARRY, CARRY,
-    MOVE,  MOVE,  MOVE,  MOVE
-  ],
-  // 750
-  4: [
-    CARRY, CARRY, CARRY, CARRY, CARRY,
-    CARRY, CARRY, CARRY, CARRY, CARRY,
-    MOVE,  MOVE,  MOVE,  MOVE,  MOVE
-  ],
-  // 750
-  5: [
-    CARRY, CARRY, CARRY, CARRY, CARRY,
-    CARRY, CARRY, CARRY, CARRY, CARRY,
-    MOVE,  MOVE,  MOVE,  MOVE,  MOVE
-  ]
-};
-
-// TODO: For local miners we don't need so much MOVE parts
-// Miner
-creepBlueprints.miner = {
-  1: [],
-  // TODO: should be more body parts
-  // TODO: In level 2 we need 4 body [WORK, WORK, WORK, MOVE] parts for miner...
-  // 450
-  2: [WORK, WORK, WORK, WORK, MOVE],
-  // 650
-  3: [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE],
-  // 650
-  4: [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE],
-  // 650
-  5: [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE]
-};
 
 // Default strategy
 const maxEnergyForBalancedCreepMap = new Map([
@@ -442,8 +421,11 @@ const maxEnergyForBalancedCreepMap = new Map([
 // Body builder
 StructureSpawn.prototype.bodyFor = function(role, options) {
   const level = this.room.controller.level;
+  const energyCapacityAvailable = this.room.energyCapacityAvailable;
   const blueprintsForRole = creepBlueprints[role];
+
   let body;
+  let parts;
 
   // Use blueprint if available
   if (blueprintsForRole) {
@@ -454,21 +436,101 @@ StructureSpawn.prototype.bodyFor = function(role, options) {
       body = creepBlueprints[role][level - 1];
     }
 
+  // Claimer
+  // TODO: I think we don't need the extra MOVE part
+  } else if (role === 'claimer') {
+    if (energyCapacityAvailable < 1300) {
+      body = [CLAIM, MOVE, MOVE]; // 700
+
+    // If we can build the bigger creap we do
+    } else {
+      body = [CLAIM, CLAIM, MOVE, MOVE]; // 1300
+    }
+
+  // Defender
+  } else if (role === 'defender') {
+    // Max energy
+    let energy = 1160;
+    if (energy > energyCapacityAvailable) {
+      energy = energyCapacityAvailable;
+    }
+
+    // A TOUGH ATTACK(er) which is fast (twice MOVE than other parts)
+    parts = Math.floor(energy / 290);
+
+    body = [];
+    for (let i = 0; i < parts; i++) {
+      body.push(TOUGH);
+    }
+
+    for (let i = 0; i < parts; i++) {
+      body.push(ATTACK);
+    }
+
+    // Even on swamp we have a walk time of 3
+    for (let i = 0; i < parts * 2; i++) {
+      body.push(MOVE);
+    }
+
+  // Lorries
+  // TODO: We could make long distance lorries bigger and reduce the number to 1?
+  } else if (role === 'lorry') {
+    // Max energy
+    let energy = 750;
+    if (energy > energyCapacityAvailable) {
+      energy = energyCapacityAvailable;
+    }
+
+    // Create a body with twice as many CARRY as MOVE parts
+    parts = Math.floor(energy / 150);
+
+    body = [];
+    for (let i = 0; i < parts * 2; i++) {
+      body.push(CARRY);
+      if (i < parts) { body.push(MOVE); }
+    }
+
+  // Miner
+  } else if (role === 'miner') {
+    // 350
+    let workParts = [WORK, WORK, WORK];
+    let moveParts = [MOVE];
+
+    if (energyCapacityAvailable >= 450) { workParts.push(WORK); }
+    if (energyCapacityAvailable >= 550) { workParts.push(WORK); }
+
+    // Perfect mining reached - we make it faster
+    if (energyCapacityAvailable >= 600) { moveParts.push(MOVE); }
+    if (energyCapacityAvailable >= 650) { moveParts.push(MOVE); }
+
+    // TODO: Make it distributed [WORK, MOVE, WORK, ...]
+    body = workParts.concat(moveParts);
+
+  // TODO: remote explorer (options.flagName) need to have ATTACK
+  // } else if (role === 'explorer') {
+
   // Create a balanced body
   } else {
-    // TODO: remote explorer (options.flagName) need to have ATTACK
-    // if (role === 'explorer') {
-    //
-    // }
     let energyForBalancedCreep = maxEnergyForBalancedCreepMap.get(level);
-    let energyCapacityAvailable = this.room.energyCapacityAvailable;
+
+    // If we want to spwan a logistics for 50 ticks but can not because we don't have energy we reduce the energyCapacityAvailable
+    if (role === 'logistics') {
+      rememberTo(
+        () => energyForBalancedCreep = energyCapacityAvailable,
+        energyForBalancedCreep > energyCapacityAvailable,
+        {
+          key: 'emergency',
+          limit: 50
+        }
+      );
+    }
 
     if (energyForBalancedCreep > energyCapacityAvailable) {
       energyForBalancedCreep = energyCapacityAvailable;
     }
 
     // create a balanced body with max 50 parts
-    let parts = Math.floor(energyForBalancedCreep / 200);
+    parts = Math.floor(energyForBalancedCreep / 200);
     parts = Math.min(parts, Math.floor(50 / 3));
 
     body = [];
