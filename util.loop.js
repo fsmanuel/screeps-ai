@@ -60,7 +60,7 @@ module.exports = {
     // Memory.maxWallHits = 350000;
 
     // Increase walls
-    everyTicks(400, function() {
+    everyTicks(1000, function() {
       // TODO: Should be limited to spawns with walls and min one tower
       _
         .toArray(Game.spawns)

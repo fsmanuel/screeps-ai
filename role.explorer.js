@@ -13,6 +13,16 @@ module.exports = function() {
   }
 
   // Default (same room)
+
+  // Don't repair other streets!
+  if(this.room.controller.level === 0 && this.room.hasConstructionSites()) {
+    // We set it on autoPilot if it's a remote explorer
+    let autoPilot = this.memory.flagName ? true : false;
+
+    actAsBuilder.call(this, autoPilot);
+    return;
+  }
+
   target = Game.getObjectById(this.memory.targetId);
 
   // Find new target

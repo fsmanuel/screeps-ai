@@ -70,12 +70,8 @@ Creep.prototype.run = function() {
 
     // Get energy from container and source
     // TODO: It should take the closest!
-    } else if (role === 'explorer') {
+    } else if (['explorer', 'logistics'].includes(role)) {
       this.getEnergy(true, true);
-
-    // Get energy from source
-    } else if (role === 'logistics') {
-      this.getEnergy(false, true);
 
     // Get energy from container
     } else if (role === 'lorry') {

@@ -6,6 +6,7 @@ const {
   rememberToFor
 } = require('util.helpers');
 
+StructureSpawn.prototype.rememberTo = rememberTo;
 StructureSpawn.prototype.rememberToFor = rememberToFor;
 
 // The autoSpawn
@@ -212,6 +213,9 @@ StructureSpawn.prototype.maintainLocalUpgrader = function() {
   if (level > 4) {
     limit = 4;
   }
+  if (level > 5) {
+    limit = 3;
+  }
 
   return this.spawnFor('upgrader', {}, limit);
 };
@@ -270,6 +274,8 @@ StructureSpawn.prototype.maintainRemoteExplorer = function(claimFlags) {
         if (containers.length < 2) {
           limit += 1;
         }
+
+        // TODO: check for construction sites
 
         // If we have are GREEN => increase
         if (flag.secondaryColor === COLOR_GREEN) {
@@ -422,6 +428,7 @@ const maxEnergyForBalancedCreepMap = new Map([
 StructureSpawn.prototype.bodyFor = function(role, options) {
   const level = this.room.controller.level;
   const energyCapacityAvailable = this.room.energyCapacityAvailable;
+  const energyAvailable = this.room.energyAvailable;
   const blueprintsForRole = creepBlueprints[role];
 
   let body;
@@ -513,14 +520,14 @@ StructureSpawn.prototype.bodyFor = function(role, options) {
   } else {
     let energyForBalancedCreep = maxEnergyForBalancedCreepMap.get(level);
 
-    // If we want to spwan a logistics for 50 ticks but can not because we don't have energy we reduce the energyCapacityAvailable
+    // If we want to spwan a logistics for 200 ticks but can not because we don't have energy we reduce the energyCapacityAvailable
     if (role === 'logistics') {
-      rememberTo(
-        () => energyForBalancedCreep = energyCapacityAvailable,
-        energyForBalancedCreep > energyCapacityAvailable,
+      this.rememberTo(
+        () => energyForBalancedCreep = energyAvailable,
+        energyForBalancedCreep > energyAvailable,
         {
           key: 'emergency',
-          limit: 50
+          limit: 200
         }
       );
     }
