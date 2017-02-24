@@ -246,6 +246,16 @@ StructureSpawn.prototype.claimColonies = function(claimFlags) {
           return creep;
         }
 
+        // If we have more than 2000 ticks we don't care
+        if (
+          flag.room &&
+          flag.room.controller.reservation &&
+          flag.room.controller.reservation.username === 'fsmanuel' &&
+          flag.room.controller.reservation.ticksToEnd > 2000
+        ) {
+          return creep;
+        }
+
         let options = { flagName: flag.name };
         let limit = 2;
 
