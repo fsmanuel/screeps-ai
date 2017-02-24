@@ -34,17 +34,14 @@ module.exports = function() {
     target = this.room.storage;
   }
 
-  // Do we have a container next to the spawn
-  // TODO: Revisit when we have 2 spawns
-  if (_.isEmpty(target) && this.room.hasSpawns()) {
-    let spawn = this.room.spawns()[0];
+  // Do we have solo containers - kind of in room logistics
+  const soloContainerIds = this.room.memory.soloContainerIds;
 
-    target = containerWithCapacity(spawn.nearContainers());
-  }
+  if (_.isEmpty(target) && !_.isEmpty(soloContainerIds)) {
+    let soloContainers = this.room.containers()
+      .filter((c) => soloContainerIds.includes(c.id));
 
-  // Do we have a container next to the controller
-  if (_.isEmpty(target)) {
-    target = containerWithCapacity(this.room.controller.nearContainers());
+    target = containerWithCapacity(soloContainers);
   }
 
   /*

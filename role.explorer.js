@@ -1,5 +1,7 @@
 let actAsBuilder = require('role.builder');
 
+const STRUCTURE_WALLS = [STRUCTURE_WALL, STRUCTURE_RAMPART];
+
 module.exports = function() {
   let target = Game.flags[this.memory.flagName];;
 
@@ -15,7 +17,7 @@ module.exports = function() {
   // Default (same room)
 
   // Don't repair other streets!
-  if(this.room.controller.level === 0 && this.room.hasConstructionSites()) {
+  if (this.room.controller.level === 0 && this.room.hasConstructionSites()) {
     // We set it on autoPilot if it's a remote explorer
     let autoPilot = this.memory.flagName ? true : false;
 
@@ -31,8 +33,22 @@ module.exports = function() {
     target = this.pos.findClosestByPath(FIND_STRUCTURES, {
       filter: s => s.hits < s.hitsMax * damageFactor
     });
+    // repair walls only up to value
+    // explorer try to build before tower
+    const maxWallHits = this.room.memory.maxWallHits + 10000;
 
-    if (target) {
+    // Select all structures below 'damageFactor'
+    // Select all walls below increased maxWallHits
+    target = this.pos.findClosestByPath(FIND_STRUCTURES, {
+      filter: (s) => {
+        return s.hits < s.hitsMax * damageFactor &&
+          !(STRUCTURE_WALLS.includes(s.structureType) && s.hits > maxWallHits);
+      }
+    });
+
+    // Remember all target´s except walls
+    // TODO: need for a better wall solution
+    if (target && !STRUCTURE_WALLS.includes(target.structureType)) {
       this.memory.targetId = target.id;
     }
   }

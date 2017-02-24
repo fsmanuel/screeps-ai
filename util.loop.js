@@ -22,6 +22,18 @@ module.exports = {
 
     // Cleanup memory
     this.cleanup();
+
+    // Room information
+    everyTicks(100, () => {
+      _
+        .values(Game.rooms)
+        .forEach((room) => {
+          // Street maps
+          room.drawStreetMap();
+          // Structural data
+          room.updateStructuralData();
+        });
+    });
   },
 
   // Spawn

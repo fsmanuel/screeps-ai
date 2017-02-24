@@ -21,6 +21,9 @@ Creep.prototype.run = function() {
   let isWorking = this.memory.working;
   let energy = this.carry.energy;
 
+  // TODO: Every creep has to visit this every tick!
+  this.room.visitPosition(this);
+
   // This roles have special tasks and don't need the working flag
 
   // Defender - Run for it!
@@ -66,7 +69,7 @@ Creep.prototype.run = function() {
 
     // Get energy from container and source
     if (['builder', 'upgrader'].includes(role)) {
-      this.getEnergy(true, false, { flag: COLOR_GREEN });
+      this.getEnergy(true, false);
 
     // Get energy from container and source
     // TODO: It should take the closest!
@@ -90,14 +93,16 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
 
   // if the Creep should look for containers
   if (useContainer) {
-    let { flag } = options;
+    let { containerId } = options;
 
     // Aka lorries
-    if (options.containerId) {
-      container = Game.getObjectById(options.containerId);
+    if (containerId) {
+      container = Game.getObjectById(containerId);
 
     // find closest container
     } else {
+      const soloContainerIds = this.room.memory.soloContainerIds;
+
       container = this.pos.findClosestByPath(FIND_STRUCTURES, {
         filter: (s) => {
           let match = [
@@ -105,9 +110,12 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
               STRUCTURE_STORAGE
             ].includes(s.structureType) && s.store[RESOURCE_ENERGY] > 0;
 
-          // If we should use a flagged container
-          if (options.flag) {
-            return match && s.hasFlag(options.flag);
+          // Only get energy from solo containers
+          if (
+            !['explorer', 'logistics'].includes(this.memory.role) &&
+            s.structureType === STRUCTURE_CONTAINER
+          ) {
+            return match && soloContainerIds.includes(s.id);
           } else {
             return match;
           }
@@ -124,7 +132,7 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
         let yellowFlag = container.pos.findClosestFlag(COLOR_YELLOW);
 
         if (yellowFlag && !this.pos.isEqualTo(yellowFlag.pos)) {
-          this.moveTo(flag);
+          this.moveTo(yellowFlag);
         }
       }
 
