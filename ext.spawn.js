@@ -45,7 +45,7 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags) {
   newCreep = this.maintainLocalBuilder();
   if (newCreep) { return; }
 
-  // Builder
+  // Upgrader
   newCreep = this.maintainLocalUpgrader();
   if (newCreep) { return; }
 
@@ -370,34 +370,41 @@ StructureSpawn.prototype.collectCreepsData = function() {
 // Mining
 StructureSpawn.prototype.spawnForMining = function(source, limits = {}) {
   let creep = null;
-  let container = source.nearContainers()[0];
+  let {
+    containerId,
+    needsLorry,
+    sourceId
+  } = source.room.miningInformationFor(source);
 
   // No container => nothing to spawn
-  if (!container) { return creep; }
+  if (!containerId) { return creep; }
 
+  // TODO: add remote information
   let options = {
-    sourceId: source.id,
-    containerId: container.id
+    sourceId,
+    containerId
   };
 
   // if the source has no miner
   creep = this.spawnFor('miner', options, limits.miner);
   if (creep) { return creep; }
 
-  // TODO: To make it more efficient for remote containers we need to call this more often, change the limit. But first we need to know if we are local or remote!
-  // if the container is at max capacity for 200 ticks
-  this.rememberToFor(
-    () => limits.lorry += 1,
-    container.isFullOf(RESOURCE_ENERGY),
-    {
-      key: 'containerNeedsLorryCount',
-      id: container.id,
-      limit: 200
-    }
-  );
+  // If the source requested a lorry we increase
+  if (needsLorry) { limits.lorry += 1; }
 
   // if the source has no lorry
   creep = this.spawnFor('lorry', options, limits.lorry);
+
+  // It's not 100% safe. It might be the case that we need to spawn a lorry anyway and this one is not the extra one we need...
+  if (
+    needsLorry &&
+    creep &&
+    Game.creeps[creep].isRole('lorry') &&
+    Game.creeps[creep].memory.sourceId === sourceId
+  ) {
+    source.room.shippingLorryFor(source);
+  }
+
   if (creep) { return creep; }
 
   return creep;

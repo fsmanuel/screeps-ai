@@ -72,34 +72,39 @@ Room.prototype.updateStructuralData = function() {
   this.memory.soloContainerIds = soloContainerIds;
 };
 
-// Room.prototype.optimizeSourceContainers = function() {
-//   const bla = function(id) {
-//     let source = this.memory.sources.find((s) => s.containerId === id);
-//
-//     if (source) {
-//       s
-//     }
-//   };
-//
-//   this.memory.soloContainerIds.forEach((id) => {
-//     let container = Game.getObjectById(id);
-//
-//     this.rememberToFor(
-//       () => ,
-//       container.isFullOf(RESOURCE_ENERGY),
-//       {
-//         id: container.id,
-//         key: 'containerNeedsLorryCount',
-//         limit: 300
-//       }
-//     );
-//   });
-//
-// };
+Room.prototype.optimizeSourceContainers = function() {
+  const requestLorry = function(index) {
+    // console.log('requestLorry', index);
+    this.memory.sources[index].needsLorry = true;
+  };
 
+  this.memory.sources.forEach((source, index) => {
+    let { containerId } = source;
+    if (!containerId) { return; }
 
+    let container = Game.getObjectById(containerId);
 
+    // Remember to request a lorry if the container is at max capacity for 300 ticks
+    this.rememberToFor(
+      () => requestLorry.call(this, index),
+      container.isFullOf(RESOURCE_ENERGY),
+      {
+        id: containerId,
+        key: 'sourceNeedsLorryCount',
+        limit: 300
+      }
+    );
+  });
+};
 
+Room.prototype.miningInformationFor = function(source) {
+  return this.memory.sources.find((s) => s.sourceId === source.id);
+};
+
+Room.prototype.shippingLorryFor = function(source) {
+  console.log('shippingLorryFor', source.id, this.name);
+  delete this.miningInformationFor(source).needsLorry;
+}
 
 // Experimental
 Room.prototype.visitPosition = function(creep) {

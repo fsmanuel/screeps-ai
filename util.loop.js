@@ -24,16 +24,19 @@ module.exports = {
     this.cleanup();
 
     // Room information
-    everyTicks(100, () => {
       _
         .values(Game.rooms)
         .forEach((room) => {
-          // Street maps
-          room.drawStreetMap();
-          // Structural data
-          room.updateStructuralData();
+          everyTicks(100, () => {
+            // Street maps
+            room.drawStreetMap();
+            // Structural data
+            room.updateStructuralData();
+          });
+
+          // Lorries
+          room.optimizeSourceContainers();
         });
-    });
   },
 
   // Spawn
