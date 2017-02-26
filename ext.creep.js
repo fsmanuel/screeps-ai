@@ -10,6 +10,10 @@ let claimerRun = require('role.claimer');
 let defenderRun = require('role.defender');
 let minerRun = require('role.miner');
 
+let monkRun = require('role.monk');
+let meleeRun = require('role.melee');
+let destroyerRun = require('role.destroyer');
+
 const {
   rememberTo
 } = require('util.helpers');
@@ -29,6 +33,24 @@ Creep.prototype.run = function() {
   // Defender - Run for it!
   if (this.isRole('defender')) {
     defenderRun.call(this);
+    return;
+  }
+
+  // monk - Run for it!
+  if (this.isRole('monk')) {
+    monkRun.call(this);
+    return;
+  }
+
+  // melee - Run for it!
+  if (this.isRole('melee')) {
+    meleeRun.call(this);
+    return;
+  }
+
+  // destroyer - Run for it!
+  if (this.isRole('destroyer')) {
+    destroyerRun.call(this);
     return;
   }
 
@@ -108,7 +130,7 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
           let match = [
               STRUCTURE_CONTAINER,
               STRUCTURE_STORAGE
-            ].includes(s.structureType) && s.store[RESOURCE_ENERGY] > 0;
+            ].includes(s.structureType) && s.store[RESOURCE_ENERGY] >= this.carryCapacity;
 
           // Only get energy from solo containers
           if (
@@ -155,7 +177,10 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
 Creep.prototype.collectDroppedEnergy = function() {
   let energy = this.pos.findInRange(FIND_DROPPED_ENERGY, 3)[0];
 
-  if (energy && energy.amount > 10) {
+  let value = this.carryCapacity / 10;
+  value = value > 10 ? value : 10;
+
+  if (energy && energy.amount > value) {
     return this.do('pickup', energy);
   }
 };

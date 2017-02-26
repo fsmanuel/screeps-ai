@@ -11,7 +11,7 @@ StructureSpawn.prototype.rememberToFor = rememberToFor;
 
 // The autoSpawn
 // TODO: think about what role needs to be checked every X ticks!
-StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags) {
+StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags, attackFlags) {
   if (this.spawning) { return; }
 
   let newCreep;
@@ -23,31 +23,37 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags) {
 
   // Survive
   newCreep = this.maintainSurvival();
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 
   // Military complex (defendFlags)
-  newCreep = this.militaryComplex(defendFlags);
-  if (newCreep) { return; }
+  newCreep = this.militaryComplexDefend(defendFlags);
+  if (newCreep) { return newCreep; }
+
+  // Military complex (attackFlags)
+  if (level >= 4) {
+    newCreep = this.militaryComplexAttack(attackFlags);
+    if (newCreep) { return newCreep; }
+  }
 
   // Mining
   newCreep = this.maintainLocalMining();
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 
   // Explorer
   newCreep = this.maintainLocalExplorer();
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 
   // Logistics
   newCreep = this.maintainLocalLogistics();
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 
   // Builder
   newCreep = this.maintainLocalBuilder();
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 
   // Upgrader
   newCreep = this.maintainLocalUpgrader();
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 
   /*
     Remote (claimed rooms)
@@ -56,20 +62,21 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags) {
   // Only spawns with a controller level 3 can maintain colonies
   if (level < 3) { return; }
 
-  // Filter claimFlags for this spawn
-  const ownedClaimFlags = claimFlags.filter(f => f.memory.spawnId === this.id);
+  // Filter claimFlags managed by controller
+  const ownedClaimFlags = claimFlags
+    .filter(f => f.memory.controllerId === this.room.controller.id);
 
   // Claimer
-  newCreep = this.claimColonies(claimFlags);
-  if (newCreep) { return; }
+  newCreep = this.claimColonies(ownedClaimFlags);
+  if (newCreep) { return newCreep; }
 
   // Remote explorer
   newCreep = this.maintainRemoteExplorer(ownedClaimFlags);
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 
   // Remote mining
   newCreep = this.maintainRemoteMining(ownedClaimFlags);
-  if (newCreep) { return; }
+  if (newCreep) { return newCreep; }
 };
 
 
@@ -80,7 +87,7 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags) {
 // If no logistics are left AND no lorries create a backup creep
 // TODO: Maybe we should check for lorry if its source is in the room?
 StructureSpawn.prototype.maintainSurvival = function() {
-  const counts = this.creepsCounts;
+  const counts = this.room.controller.creepsCounts;
 
 
   // TODO: We have a problem if 2 lorries are in another room!! We kill ourselfs!
@@ -101,7 +108,7 @@ StructureSpawn.prototype.maintainSurvival = function() {
 
 // Military complex
 // We run it every 2 ticks to spawn other creeps as well
-StructureSpawn.prototype.militaryComplex = function(defendFlags) {
+StructureSpawn.prototype.militaryComplexDefend = function(defendFlags) {
   return everyTicks(2, () => {
     if (_.isEmpty(defendFlags)) { return; }
 
@@ -113,11 +120,11 @@ StructureSpawn.prototype.militaryComplex = function(defendFlags) {
         let limit = 2;
         let options = { flagName: flag.name };
 
-        let defenders = flag.room.find(FIND_MY_CREEPS, {
-          filter: c => c.isRole('defender')
+        let defenders = _.toArray(Game.creeps).filter( (c) => {
+            return c.isRole('defender') && c.memory.flagName === flag.name
         });
 
-        // If we already have enough defenders in the room
+        // If we already have enough defenders mapped on the flag
         if (defenders.length >= limit) {
           limit = 0;
         }
@@ -126,6 +133,50 @@ StructureSpawn.prototype.militaryComplex = function(defendFlags) {
       }, undefined);
 
     console.log('Ui! We have to defend our selfs');
+  });
+};
+
+StructureSpawn.prototype.militaryComplexAttack = function(attackFlags) {
+  return everyTicks(2, () => {
+    if (_.isEmpty(attackFlags)) { return; }
+
+    return attackFlags
+      .reduce((creep, flag) => {
+        if (creep || !flag.memory.active) { return creep; }
+
+        let options = { flagName: flag.name };
+        let limit = 0;
+
+        if (flag.memory.tactic == 'destroy') {
+          limit = flag.memory.limit;
+          return this.spawnForMilitary('destroyer', options, limit);
+        }
+
+        if (flag.memory.tactic === 'sabotageWithDeathblow') {
+          limit = flag.memory.monkLimit;
+          if (flag.memory.unitTypes.monk.length < limit) {
+            creep = this.spawnForMilitary('monk', options, limit);
+
+            if (creep) {
+              flag.memory.unitTypes.monk.push(creep);
+              return creep;
+            }
+          }
+
+          limit = flag.memory.meleeLimit;
+          if (flag.memory.unitTypes.melee.length < limit) {
+            creep = this.spawnForMilitary('melee', options, limit);
+
+            if (creep) {
+              flag.memory.unitTypes.melee.push(creep);
+              return creep;
+            }
+          }
+
+          return creep;
+        }
+      }, undefined);
+    console.log('Support our offensive');
   });
 };
 
@@ -151,10 +202,21 @@ StructureSpawn.prototype.maintainLocalMining = function() {
 StructureSpawn.prototype.maintainLocalBuilder = function() {
   let limit = 1;
 
-  let constructionSites = this.room.find(FIND_CONSTRUCTION_SITES);
+  let constructionSites = this.room.find(FIND_MY_CONSTRUCTION_SITES);
 
-  // Only spawn if we have construction sites
-  if (_.isEmpty(constructionSites)) {
+  /*
+  TODO: spawn less when sites are roads, walls, ramps
+  if (constructionSites) {
+    let sites= constructionSites.length;
+    let roads= constructionSites.filter(c => c.structureType === 'road').length;
+    let walls= constructionSites.filter(c => c.structureType === 'wall').length;
+
+    sites - (roads + walls) + Math.round(roads/5) + Math.round(walls/5))
+  }
+  */
+
+  // Only spawn if we have construction sites or containers
+  if (!this.room.hasConstructionSites() || !this.room.hasContainers()) {
     limit = 0;
   } else {
     // Increase if we have 4 or more construction sites
@@ -191,8 +253,28 @@ StructureSpawn.prototype.maintainLocalExplorer = function() {
   let limit = 1;
   let towers = this.room.towers();
 
-  // If we have a tower we don't need an explorer
-  if (towers.length > 0) {
+  // TODO: better reuse of census data
+  // In Strongholds we need explorer to build walls and ramparts
+  if (this.room.isStronghold()) {
+    let allExplorer = _.toArray(Game.creeps).filter(c => {
+        return c.memory.controllerId === this.room.controller.id &&
+            c.memory.role === 'explorer'
+    });
+
+    let roomExplorer = this.room.find(FIND_MY_CREEPS, {
+      filter: (c) => {
+          return !c.memory.hasOwnProperty('flagName')
+          && c.memory.controllerId === this.room.controller.id
+          && c.memory.role === 'explorer'
+      }
+    });
+
+    if (roomExplorer.length < 1) {
+        if (allExplorer) { limit = allExplorer.length + 1; }
+    }
+  }
+  // If we have a tower we don't need an explorer in non stronghold rooms
+  else if (towers.length > 0 && !this.room.hasWalls()) {
     limit = 0;
   }
 
@@ -200,15 +282,75 @@ StructureSpawn.prototype.maintainLocalExplorer = function() {
 };
 
 // Upgrader
+
 // TODO revisit the limit
+// WIP: this is already under construction, but this code upgrades really fast yet
 StructureSpawn.prototype.maintainLocalUpgrader = function() {
+  let upgrader = this.room.find(FIND_MY_CREEPS, {
+    filter: (c) => {
+        return c.memory.controllerId === this.room.controller.id
+        && c.memory.role === 'upgrader'
+    }
+  });
+  let upgraderCount = upgrader.length;
+
+  let storage = this.room.controller.nearStorage(4);
+  let containers = this.room.controller.nearContainers(4);
+  let additional = 0;
+
+  // If we have a storage near the controller
+  if (storage) {
+      let storageEnergy = storage.store[RESOURCE_ENERGY];
+      // and he gets full --> increase
+      if (storageEnergy >= 10000) {
+          additional += 1;
+      }
+      // and fuller --> increase
+      if (storageEnergy >= 20000) {
+          additional += 1;
+      }
+      // and WOW! --> increase
+      if (storageEnergy >= 40000) {
+          additional += 1;
+      }
+  }
+  else if (!_.isEmpty(containers)) {
+      // TODO: If there are more than one container
+      everyTicks(100, function() {
+        let containerEnergy = containers[0].store[RESOURCE_ENERGY];
+
+        if (containerEnergy > 1333) {
+          // 1333 results from the 'carry + carry * 1/3' condition of logistics (at 500 carryCap)
+          additional = upgraderCount;
+        }
+      });
+  }
+
   const level = this.room.controller.level;
   let limit = level;
 
-  // If we hit level 4 we have the builder as support
-  if (level > 3) {
-    // In level 5 the best limit is 2 maybe we can increase on level 6
-    limit = 2;
+  //WIP: This can be refactored after finished adjusting
+  if (_.isEmpty(containers)) {
+      limit = 0;
+  } else {
+    if (level == 2) {
+        limit = 1;
+        if (this.room.hasExtensions(5)) {
+            limit += additional;
+        }
+    }
+    if (level == 3) {
+        limit = 1;
+        if (this.room.hasExtensions(10)) {
+            limit += additional;
+        }
+    }
+    if (level > 3) {
+        limit = 1;
+        if (this.room.hasExtensions(20)) {
+            limit += additional;
+        }
+    }
   }
   if (level > 4) {
     limit = 4;
@@ -219,7 +361,6 @@ StructureSpawn.prototype.maintainLocalUpgrader = function() {
 
   return this.spawnFor('upgrader', {}, limit);
 };
-
 
 /*
  Remote
@@ -232,8 +373,9 @@ StructureSpawn.prototype.claimColonies = function(claimFlags) {
       .reduce((creep, flag) => {
         if (creep) { return creep; }
 
-        // If the flag is owned by another spawn we don't care
-        if (flag.memory.spawnId && flag.memory.spawnId !== this.id) {
+        // If the flag is owned by another controller we don't care
+        if (flag.memory.controllerId
+        && flag.memory.controllerId !== this.room.controller.id) {
           return creep;
         }
 
@@ -280,19 +422,27 @@ StructureSpawn.prototype.maintainRemoteExplorer = function(claimFlags) {
         let options = { flagName: flag.name };
         let containers = flag.room.containers();
 
-        // If we don't have 2 containers => increase
-        if (containers.length < 2) {
+        // If we don't have 2 containers and more than 1 source => increase
+        if (containers.length < 2 && flag.room.find(FIND_SOURCES).length > 1) {
           limit += 1;
         }
 
-        // TODO: check for construction sites
-
-        // If we have are GREEN => increase
+        // If flag secondary is GREEN => increase
         if (flag.secondaryColor === COLOR_GREEN) {
           limit += 1;
 
           // If we have no spawns => increase
           if (!flag.room.hasSpawns()) {
+            limit += 1;
+          }
+
+          // If we have less then 5 extensions => increase
+          if (!flag.room.hasExtensions(5)) {
+            limit += 1;
+          }
+
+          // If we have less then 10 extensions => increase
+          if (!flag.room.hasExtensions(10)) {
             limit += 1;
           }
         }
@@ -318,9 +468,9 @@ StructureSpawn.prototype.maintainRemoteMining = function(claimFlags) {
 
         // If flag room has two miner we don't need to support them anymore
         if (flag.room.hasSpawns()) {
-          let spawn = flag.room.spawns()[0];
+          let controller = flag.room.controller;
 
-          if (spawn.creepsCounts['miner'] >= 2) {
+          if (controller.creepsCounts['miner'] >= 2) {
             limits.miner = 0;
           }
         }
@@ -345,27 +495,6 @@ StructureSpawn.prototype.maintainRemoteMining = function(claimFlags) {
 /*
  Helpers
 */
-
-// Creeps governed by the spawn
-StructureSpawn.prototype.collectCreepsData = function() {
-  // Get all creeps
-  this.creeps = _
-    .toArray(Game.creeps)
-    .filter(c => c.memory.spawnId === this.id);
-
-  // Collect creeps statistics
-  this.creepsCounts = this.creeps.reduce(function(data, creep) {
-    let role = creep.memory.role;
-
-    data[role] = data[role] ? data[role] + 1 : 1;
-    return data;
-  }, {});
-
-  // Show population per spawn
-  everyTicks(100, () => {
-    Logger.log(this.name, JSON.stringify(this.creepsCounts));
-  });
-};
 
 // Mining
 StructureSpawn.prototype.spawnForMining = function(source, limits = {}) {
@@ -412,7 +541,23 @@ StructureSpawn.prototype.spawnForMining = function(source, limits = {}) {
 
 // Spawn a role if limit is not reached (options act as filters)
 StructureSpawn.prototype.spawnFor = function(role, options = {}, limit = 1) {
-  let creeps = this.creeps.filter(c => c.memory.role === role)
+  let creeps = this.room.controller.creeps.filter(c => c.memory.role === role)
+
+  // We apply all options to the filter
+  if (!_.isEmpty(options)) {
+    let keys = Object.keys(options);
+
+    creeps = creeps
+      .filter(c => keys.map(k => c.memory[k] === options[k]).every(v => v))
+  }
+
+  if (creeps.length < limit) {
+    return this.createCustomCreep(role, options);
+  }
+};
+
+StructureSpawn.prototype.spawnForMilitary = function(role, options = {}, limit = 1) {
+  let creeps = this.room.controller.creeps.filter(c => c.memory.role === role)
 
   // We apply all options to the filter
   if (!_.isEmpty(options)) {
@@ -438,7 +583,9 @@ const maxEnergyForBalancedCreepMap = new Map([
   [3, 800],
   [4, 1000],
   [5, 1200],
-  [6, 1200]
+  [6, 1200],
+  [7, 1200],
+  [8, 1200]
 ]);
 
 // Body builder
@@ -460,11 +607,78 @@ StructureSpawn.prototype.bodyFor = function(role, options) {
       body = creepBlueprints[role][level - 1];
     }
 
+  // Upgrader
+  } else if (role === 'upgrader') {
+    // TODO: make it more depend on energy available
+    // but to do this we have to combine body creation and creep spawning count
+    /* WIP
+        //1) if there are more than one -> iterate and sum.
+        //2) are they flaged green
+    //let container = this.room.controller.nearContainers(4)[0];
+    //let storage = this.room.controller.nearStorage(6);
+    */
+
+    //TODO: refactor
+
+    var addWork = 0;
+    var addCarry = 0;
+    var addMove = 0;
+    var base = 1;
+
+    if (level == 2) {
+      // 250+300=550 / 550
+      addWork = 2;
+      addCarry = 1;
+      addMove = 0;
+    }
+
+    else if (level == 3) {
+      // 450+300=750
+      addWork = 3;
+      addCarry = 2;
+      addMove = 1;
+    }
+
+    else if (level == 4) {
+      // 1000+300=1300 / 1300
+      addWork = 7;
+      addCarry = 4;
+      addMove = 2;
+    }
+
+    else if (level => 5) {
+      // 1500+300=1800 / 1800
+      addWork = 10;
+      addCarry = 6;
+      addMove = 4;
+    }
+
+    body = [];
+    for (let i = 0; i < addWork; i++) {
+      body.push(WORK);
+    }
+
+    for (let i = 0; i < addCarry; i++) {
+      body.push(CARRY);
+    }
+
+    for (let i = 0; i < addMove; i++) {
+      body.push(MOVE);
+    }
+
+    // basic part - 300
+    for (let i = 0; i < base; i++) {
+      body.push(WORK);
+      body.push(WORK);
+      body.push(CARRY);
+      body.push(MOVE);
+    }
+
   // Claimer
   // TODO: I think we don't need the extra MOVE part
   } else if (role === 'claimer') {
     if (energyCapacityAvailable < 1300) {
-      body = [CLAIM, MOVE, MOVE]; // 700
+      body = [CLAIM, MOVE]; // 650
 
     // If we can build the bigger creap we do
     } else {
@@ -486,21 +700,23 @@ StructureSpawn.prototype.bodyFor = function(role, options) {
     for (let i = 0; i < parts; i++) {
       body.push(TOUGH);
     }
-
-    for (let i = 0; i < parts; i++) {
-      body.push(ATTACK);
-    }
+    // COMMIT: better positioning of attack parts (fight until the end)
+    // TODO: code it pirx!
 
     // Even on swamp we have a walk time of 3
     for (let i = 0; i < parts * 2; i++) {
       body.push(MOVE);
     }
 
+    for (let i = 0; i < parts; i++) {
+      body.push(ATTACK);
+    }
+
   // Lorries
   // TODO: We could make long distance lorries bigger and reduce the number to 1?
   } else if (role === 'lorry') {
     // Max energy
-    let energy = 750;
+    let energy = 1050;
     if (energy > energyCapacityAvailable) {
       energy = energyCapacityAvailable;
     }
@@ -532,6 +748,132 @@ StructureSpawn.prototype.bodyFor = function(role, options) {
 
   // TODO: remote explorer (options.flagName) need to have ATTACK
   // } else if (role === 'explorer') {
+
+  // pawn
+  } else if (role === 'monk') {
+    // Max energy
+    let energy = 1290;
+    if (energy > energyCapacityAvailable) {
+      energy = energyCapacityAvailable;
+    }
+
+    // A pawn to absorb energy from towers
+    //parts = Math.floor(energy / 70);
+
+    body = [];
+    for (let i = 0; i < 2; i++) {
+      body.push(TOUGH);
+    }
+
+    // Even on swamp we have a walk time of 3
+    for (let i = 0; i < 6; i++) {
+      body.push(MOVE);
+    }
+
+    for (let i = 0; i < 4; i++) {
+      body.push(HEAL);
+    }
+
+    body.push(RANGED_ATTACK);
+
+     /*
+    // Max energy
+    let energy = 1300;
+    if (energy > energyCapacityAvailable) {
+      energy = energyCapacityAvailable;
+    }
+
+    // A pawn to absorb energy from towers
+    //parts = Math.floor(energy / 70);
+    parts = 14;
+
+    body = [];
+    for (let i = 0; i < parts; i++) {
+      body.push(TOUGH);
+    }
+
+    // Even on swamp we have a walk time of 3
+    for (let i = 0; i < parts; i++) {
+      body.push(MOVE);
+    }
+
+    for (let i = 0; i < 1; i++) {
+      body.push(HEAL);
+      body.push(MOVE);
+    }
+    */
+  // melee
+  } else if (role === 'melee') {
+    // Max energy
+    let energy = 1140;
+    if (energy > energyCapacityAvailable) {
+      energy = energyCapacityAvailable;
+    }
+
+    // A light armored melee
+    //parts = Math.floor(energy / 70);
+    let armor = 2; // 2
+    let attack = 5; // 5
+
+    body = [];
+    for (let i = 0; i < armor; i++) {
+      body.push(TOUGH);
+      body.push(MOVE);
+    }
+
+    // Even on swamp we have a walk time of 3
+    for (let i = 0; i < attack; i++) {
+      body.push(MOVE);
+      body.push(ATTACK);
+    }
+
+  // destroyer
+  } else if (role === 'destroyer') {
+    // Max energy
+    let energy = 1200;
+    if (energy > energyCapacityAvailable) {
+      energy = energyCapacityAvailable;
+    }
+
+    // A destroyer
+    //parts = Math.floor(energy / 150);
+    parts = 8;
+
+    body = [];
+    for (let i = 0; i < parts; i++) {
+      body.push(WORK);StructureSpawn.prototype.maintainLocalExplorer = function() {
+  let limit = 1;
+  let towers = this.room.towers();
+
+  // TODO: better reuse of census data
+  // In Strongholds we need explorer to build walls and ramparts
+  if (this.room.isStronghold()) {
+    let allExplorer = _.toArray(Game.creeps).filter(c => {
+        return c.memory.controllerId === this.room.controller.id &&
+            c.memory.role === 'explorer'
+    });
+
+    let roomExplorer = this.room.find(FIND_MY_CREEPS, {
+      filter: (c) => {
+          return !c.memory.hasOwnProperty('flagName')
+          && c.memory.controllerId === this.room.controller.id
+          && c.memory.role === 'explorer'
+      }
+    });
+
+    if (roomExplorer.length < 1) {
+        if (allExplorer) { limit = allExplorer.length + 1; }
+    }
+  }
+  // If we have a tower we don't need an explorer in non stronghold rooms
+  else if (towers.length > 0 && !this.room.hasWalls()) {
+    limit = 0;
+  }
+
+  return this.spawnFor('explorer', {}, limit);
+};
+      body.push(MOVE);
+    }
 
   // Create a balanced body
   } else {
@@ -589,7 +931,7 @@ StructureSpawn.prototype.createCustomCreep = function(role, options = {}) {
   const memory = _.assign({
     role,
     working: false,
-    spawnId: this.id
+    controllerId: this.room.controller.id
   }, options);
   const body = this.bodyFor(role, memory);
 

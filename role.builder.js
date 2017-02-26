@@ -16,11 +16,11 @@ module.exports = function(autoPilot) {
   // Build
   // This strategy is for efficiency
   if (autoPilot) {
-    target = this.pos.findClosestByPath(FIND_CONSTRUCTION_SITES);
+    target = this.pos.findClosestByPath(FIND_MY_CONSTRUCTION_SITES);
 
   // This strategy is for user control
   } else {
-    target = this.room.find(FIND_CONSTRUCTION_SITES)[0];
+    target = this.room.find(FIND_MY_CONSTRUCTION_SITES)[0];
   }
 
   if (target) {

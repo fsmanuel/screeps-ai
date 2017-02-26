@@ -4,6 +4,7 @@ const {
 
 Room.prototype.rememberToFor = rememberToFor;
 
+// Construction sites
 Room.prototype.constructionSites = function() {
   return this.find(FIND_MY_CONSTRUCTION_SITES);
 };
@@ -23,9 +24,22 @@ Room.prototype.hasContainers = function() {
   return !_.isEmpty(this.containers());
 };
 
+// Extensions
+Room.prototype.extensions = function() {
+  return this.find(FIND_MY_STRUCTURES, {
+    filter: s => s.structureType === STRUCTURE_EXTENSION
+  });
+};
+
+Room.prototype.hasExtensions = function(amount) {
+  return this.extensions().length >= amount;
+};
+
 // Spawns
 Room.prototype.spawns = function() {
-  return this.find(FIND_MY_SPAWNS);
+  return this.find(FIND_MY_SPAWNS, {
+      filter: s => s.isActive()
+  });
 };
 
 Room.prototype.hasSpawns = function() {
@@ -41,6 +55,29 @@ Room.prototype.towers = function() {
 
 Room.prototype.hasTowers = function() {
   return !_.isEmpty(this.towers());
+};
+
+// Walls
+Room.prototype.walls = function() {
+  return this.find(FIND_STRUCTURES, {
+    filter: (s) => {
+        return s.structureType === STRUCTURE_WALL ||
+        s.structureType === STRUCTURE_RAMPART
+    }
+  });
+};
+
+Room.prototype.hasWalls = function() {
+  return !_.isEmpty(this.walls());
+};
+
+Room.prototype.underAttack = function() {
+  let enemys = this.find(FIND_HOSTILE_CREEPS);
+  return !_.isEmpty();
+};
+
+Room.prototype.isStronghold = function() {
+  return this.controller.level > 1 && this.controller.my && this.hasWalls()
 };
 
 // Save information about the room in memory
@@ -65,6 +102,7 @@ Room.prototype.updateStructuralData = function() {
   this.memory.sources = sources;
 
   const sourceContainerIds = this.memory.sources.map((s) => s.containerId);
+  // TODO: exclude STRUCTURE_EXTRACTOR containers or better rename sources to mining
   const soloContainerIds = this.containers()
     .filter((c) => !sourceContainerIds.includes(c.id))
     .map((c) => c.id);
@@ -77,6 +115,9 @@ Room.prototype.optimizeSourceContainers = function() {
     // console.log('requestLorry', index);
     this.memory.sources[index].needsLorry = true;
   };
+
+  // We don't have information yet
+  if (!this.memory.sources) { return; }
 
   this.memory.sources.forEach((source, index) => {
     let { containerId } = source;
@@ -91,7 +132,7 @@ Room.prototype.optimizeSourceContainers = function() {
       {
         id: containerId,
         key: 'sourceNeedsLorryCount',
-        limit: 300
+        limit: 800
       }
     );
   });
@@ -120,7 +161,8 @@ Room.prototype.visitPosition = function(creep) {
 };
 
 Room.prototype.drawStreetMap = function() {
-  // if (this.name !== 'W81N5') { return; }
+  // if (this.name !== 'W82N3') { return; }
+  //
   // _
   //   .forEach(this.memory.streetMap, (value, x) => {
   //     _.forEach(value, (value, y) => {

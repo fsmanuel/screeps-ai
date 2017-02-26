@@ -24,7 +24,7 @@ StructureTower.prototype.defend = function() {
     });
   }
 
-  // Then go for RANGED_ATTACK or ATTACK
+  // Then go for ALL HOSTILE
   if (!target) {
     target = this.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
   }
@@ -33,9 +33,23 @@ StructureTower.prototype.defend = function() {
   if (target) {
     this.attack(target);
   } else {
+    // Heal
+    let target = this.room.find(FIND_MY_CREEPS, {
+      filter: (creep) => {
+        return creep.hits < creep.hitsMax && this.pos.getRangeTo(creep) <= 35;
+      }
+    })[0];
+
+    if (target) {
+      this.heal(target);
+    }
+
+    // Repair
     let maxWallHits = this.room.memory.maxWallHits;
 
-    // Distribute wall repais (s.hits < 255000)
+    // structure hits has to fall under the maximal tower reapair capability
+    const maxRepairValue = 800 * this.room.towers().length;
+
     target = this.pos.findClosestByRange(FIND_STRUCTURES, {
       filter: (s) => {
         // TODO: STRUCTURE_RAMPART should be prioritized - maybe we should switch under the maxWallHits until they reach a sustainable limit
@@ -47,7 +61,7 @@ StructureTower.prototype.defend = function() {
         ].includes(s.structureType)) {
           return s.hits < maxWallHits && s.hits < s.hitsMax;
         } else {
-          return s.hits < s.hitsMax;
+          return s.hitsMax - s.hits >= maxRepairValue;
         }
       }
     });

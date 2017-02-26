@@ -24,14 +24,15 @@ module.exports = function() {
     }
 
     if (_.isEmpty(target)) {
-      this.moveTo(flag, {
-        reusePath: 0
-      });
+      flag = this.room.find(FIND_FLAGS, {
+        filter: (f) => {
+          return f.color === COLOR_GREY && f.secondaryColor === COLOR_GREY;
+        }
+      })[0];
 
-      return;
+      this.moveTo(flag);
     }
 
     this.do('attack', target);
   }
-
 };

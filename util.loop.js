@@ -8,6 +8,14 @@ const runOrder = {
   lorry: 2
 };
 
+// Prio to runOrder roles
+const sortByRunOrder = function(a, b) {
+  let aCreep = runOrder[a.memory.role] || 10;
+  let bCreep = runOrder[b.memory.role] || 10;
+
+  return aCreep - bCreep;
+};
+
 module.exports = {
   setup() {
     // Convert flags to an array
@@ -15,6 +23,8 @@ module.exports = {
 
     // TODO: Find a way to run it everyTicks (we can not save it in memory!)
     this.updateClaims();
+
+    this.updateFlags();
 
     // If enemies are detected set flags
     // TODO: We can do it every 5 ticks
@@ -28,11 +38,12 @@ module.exports = {
         .values(Game.rooms)
         .forEach((room) => {
           everyTicks(100, () => {
-            // Street maps
-            room.drawStreetMap();
             // Structural data
             room.updateStructuralData();
           });
+
+          // Street maps
+          room.drawStreetMap();
 
           // Lorries
           room.optimizeSourceContainers();
@@ -41,29 +52,32 @@ module.exports = {
 
   // Spawn
   spawn() {
-    // Collect creeps population governed by the spawn aka census
-    Object
-      .keys(Game.spawns)
-      .forEach((spawn) => {
-        Game.spawns[spawn].collectCreepsData();
-      });
+    // Select all fully controlled rooms
+    let controlledRooms = _
+      .values(Game.rooms)
+      .filter(room => room.controller.my == true)
+
+    // Collect creeps population governed by the controller aka census
+    controlledRooms.forEach((room) => {
+        room.controller.collectCreepsData();
+    });
 
     // Then we autoSpawnCreeps
-    for (let name in Game.spawns) {
-      Game.spawns[name].autoSpawnCreeps(this.claims, this.defendFlags);
-    }
+    controlledRooms.forEach((room) => {
+      room.controller.autoSpawnCreeps(
+        this.claims,
+        this.defendFlags,
+        this.attackFlags
+      );
+    });
   },
 
   run() {
     // We sort the creeps by role via runOrder
     _
       .values(Game.creeps)
-      .sort(function(a, b) {
-        let aCreep = runOrder[a.memory.role] || 10;
-        let bCreep = runOrder[b.memory.role] || 10;
-
-        return aCreep - bCreep;
-      })
+      .sort(sortByRunOrder)
+      // TODO: Check if we need the if
       .forEach(function(creep) {
         if (creep) {
           creep.run();
@@ -72,30 +86,44 @@ module.exports = {
   },
 
   defendAndRepair() {
-    // Memory.maxWallHits = 350000;
-
     // Increase walls
-    everyTicks(1000, function() {
-      // TODO: Should be limited to spawns with walls and min one tower
+    const time = 400;
+    everyTicks(time, function() {
       _
-        .toArray(Game.spawns)
-        // TODO: Filter for main spawns (!memory.slave)
-        .forEach((spawn) => {
-
-          // TODO: Revisit value
-          // TODO: Pick the right start. It should be arround or a bit over a container
-          if (!spawn.room.memory.maxWallHits) {
-            spawn.room.memory.maxWallHits = 350000;
+        .toArray(Game.rooms)
+        .forEach((room) => {
+          // Set initial wall hits
+          if (!room.memory.maxWallHits && room.isStronghold()) {
+            room.memory.maxWallHits = 1000;
           }
 
-          // TODO: I guess from level 3-5 1000 was a good thing
-          // TODO: if we are on level 5 with the controller in the room we should increase to 1000-2000
-          spawn.room.memory.maxWallHits += 1000;
-          Logger.log(
-            'Increased walls:',
-            spawn.room.name,
-            spawn.room.memory.maxWallHits
-          );
+          if (room.memory.maxWallHits < 3000000) {
+              var oldLimit = room.memory.maxWallHits;
+              const base = 1000;
+
+              let walls = room.walls().length;
+
+              // We increase the added value by controller level
+              if (room.controller.level == 4) {
+                  let value = Math.floor((time / 8) / walls) * base;
+
+                  room.memory.maxWallHits += value;
+              }
+              else if (room.controller.level >= 5) {
+                  let value = Math.floor((time / 4) / walls) * base;
+
+                  room.memory.maxWallHits += value;
+              } else {
+                // Level 1 - 3
+                room.memory.maxWallHits += base;
+              }
+
+              Logger.log(
+                'Increased walls in', room.name,
+                ' from', oldLimit,
+                ' to:', room.memory.maxWallHits
+              );
+          }
         });
     });
 
@@ -109,9 +137,78 @@ module.exports = {
       });
   },
 
+  // Two flags are needed  (crusade and crusadeWithdrawal)
+  attack() {
+    let targetName = 'crusade';
+    let withdrawalName = 'crusadeWithdrawal';
+
+    let crusadeFlag = Game.flags[targetName];
+
+    // tacticConfig = {
+    //   sabotageWithDeathblow: {
+    //     phase: 1,
+    //     spawning: false,
+    //     unitLimits: {
+    //       monk: 4,
+    //       melee: 4
+    //     },
+    //     unitTypes : {
+    //       monk : [],
+    //       melee : []
+    //     },
+    //
+    //
+    //   }
+    // }
+    // destroy = active : false, tactic : destroy, limit : 2, radius : 0, targetType : [ALL, HOSTILE]
+    if (crusadeFlag) {
+        if (!crusadeFlag.memory.setUp) {
+            crusadeFlag.memory = {
+                setUp : true,
+                active : false,
+                //goal : 'conquest',
+                tactic : 'sabotageWithDeathblow',
+                tacticalPhase : 1,
+                tacticalWithdrawalTo : withdrawalName,
+                //attackerRooms : ['W83N9', 'W83N8'],
+                //supporterRooms : [],
+                unitTypes : {
+                    monk : [],
+                    melee : []
+                },
+                monkLimit : 4,
+                meleeLimit : 4
+            }
+        } else {
+            // update
+            for(let type in crusadeFlag.memory.unitTypes) {
+                for(let u in type) {
+                    let creepName = crusadeFlag.memory.unitTypes[type][u];
+                    if (!Game.creeps[creepName]) {
+
+                      // We need it for the migration
+                      // if (type === 'monk') {
+                      //   // delete crusadeFlag.memory.unitTypes[type]
+                      //                         crusadeFlag.memory.unitTypes[type] = crusadeFlag.memory.unitTypes[type] || [];
+                      // }
+
+                        crusadeFlag.memory.unitTypes[type].splice(u, 1);
+                    }
+                }
+            }
+        }
+    }
+  },
+
   // Helper
   flagsToArray() {
     this.flags = _.toArray(Game.flags);
+  },
+
+  updateFlags() {
+    this.attackFlags = this.flags.filter((f) => {
+      return f.color === COLOR_PURPLE && f.secondaryColor === COLOR_PURPLE;
+    });
   },
 
   // Claims are represented by BLUE flags

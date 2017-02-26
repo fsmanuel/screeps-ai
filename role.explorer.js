@@ -29,9 +29,23 @@ module.exports = function() {
 
   // Find new target
   if (!target || target.hits === target.hitsMax) {
+    // repair structures when hits are below factor
     const damageFactor = 0.75;
+    // repair walls only up to value
+    // explorer try to build before tower
+
+    let wallValue = this.room.memory.maxWallHits ? this.room.memory.maxWallHits + 10000 : 0;
+
+    // Select all structures below 'damageFactor'
+    // Select all walls & ramps below increased maxWallHits
     target = this.pos.findClosestByPath(FIND_STRUCTURES, {
-      filter: s => s.hits < s.hitsMax * damageFactor
+      filter: (s) => {
+        return s.hits < s.hitsMax * damageFactor &&
+            !(
+              [STRUCTURE_WALL, STRUCTURE_RAMPART].includes(s.structureType) &&
+              s.hits > wallValue
+            );
+      }
     });
     // repair walls only up to value
     // explorer try to build before tower
