@@ -4,13 +4,25 @@ const {
 } = require('util.helpers');
 
 StructureController.prototype.autoSpawnCreeps = function(claimFlags, defendFlags, attackFlags) {
+  let creep;
   let spawns = this.room.find(FIND_MY_SPAWNS);
 
-  return spawns.reduce((creep, spawn) => {
-      if (creep) { return creep; }
+  // console.log(this.spawning);
+  for(let i in spawns) {
+    let spawn = spawns[i];
+    if (spawn.spawning) { continue; }
 
-      return spawn.autoSpawnCreeps(claimFlags, defendFlags, attackFlags);
-  }, undefined);
+    if (!this.spawning) {
+      creep = spawn.autoSpawnCreeps(claimFlags, defendFlags, attackFlags);
+
+      if (creep) {
+        this.spawning = true;
+      }
+      // console.log(creep);
+
+      return creep;
+    }
+  }
 };
 
 /*
@@ -32,7 +44,7 @@ StructureController.prototype.collectCreepsData = function() {
 
   // Show population per spawn
   everyTicks(100, () => {
-    Logger.log(this.room.name , JSON.stringify(this.creepsCounts));
+    Logger.log(this.room.name, JSON.stringify(this.creepsCounts));
   });
 };
 

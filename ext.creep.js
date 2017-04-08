@@ -158,8 +158,10 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
         }
       }
 
-      // Done!
-      this.do('withdraw', container, RESOURCE_ENERGY);
+      if (container.store.energy >= this.carryCapacity) {
+        // Go get it!
+        this.do('withdraw', container, RESOURCE_ENERGY);
+      }
     }
   }
 

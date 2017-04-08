@@ -77,6 +77,11 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags, att
   // Remote mining
   newCreep = this.maintainRemoteMining(ownedClaimFlags);
   if (newCreep) { return newCreep; }
+
+  // Remote support
+  newCreep = this.maintainRemoteSupport(ownedClaimFlags);
+  if (newCreep) { return newCreep; }
+
 };
 
 
@@ -286,6 +291,13 @@ StructureSpawn.prototype.maintainLocalExplorer = function() {
 // TODO revisit the limit
 // WIP: this is already under construction, but this code upgrades really fast yet
 StructureSpawn.prototype.maintainLocalUpgrader = function() {
+  const level = this.room.controller.level;
+
+  // No more need to upgrade
+  if (level === 8) { return; }
+
+  let limit = level;
+
   let upgrader = this.room.find(FIND_MY_CREEPS, {
     filter: (c) => {
         return c.memory.controllerId === this.room.controller.id
@@ -325,9 +337,6 @@ StructureSpawn.prototype.maintainLocalUpgrader = function() {
         }
       });
   }
-
-  const level = this.room.controller.level;
-  let limit = level;
 
   //WIP: This can be refactored after finished adjusting
   if (_.isEmpty(containers)) {
@@ -374,8 +383,10 @@ StructureSpawn.prototype.claimColonies = function(claimFlags) {
         if (creep) { return creep; }
 
         // If the flag is owned by another controller we don't care
-        if (flag.memory.controllerId
-        && flag.memory.controllerId !== this.room.controller.id) {
+        if (
+          flag.memory.controllerId &&
+          flag.memory.controllerId !== this.room.controller.id
+        ) {
           return creep;
         }
 
@@ -445,6 +456,10 @@ StructureSpawn.prototype.maintainRemoteExplorer = function(claimFlags) {
           if (!flag.room.hasExtensions(10)) {
             limit += 1;
           }
+
+          if (flag.room.controller.level > 6 && flag.room.hasSpawns()) {
+            limit = 0;
+          }
         }
 
         return this.spawnFor('explorer', options, limit);
@@ -462,7 +477,7 @@ StructureSpawn.prototype.maintainRemoteMining = function(claimFlags) {
 
         let limits = {
           miner: 1,
-          lorry: 2
+          lorry: 1
         };
         let containers = flag.room.containers();
 
@@ -470,13 +485,17 @@ StructureSpawn.prototype.maintainRemoteMining = function(claimFlags) {
         if (flag.room.hasSpawns()) {
           let controller = flag.room.controller;
 
-          if (controller.creepsCounts['miner'] >= 2) {
+          if (controller.level >= 3) {
             limits.miner = 0;
           }
         }
 
         // We support a claimed colony with 3 containers with 1 lorry
-        if (flag.secondaryColor === COLOR_GREEN && containers.length >= 3) {
+        if (
+          flag.secondaryColor === COLOR_GREEN &&
+          containers.length >= 3 &&
+          flag.room.controller.level < 6
+        ) {
           limits.lorry = 1;
         }
 
@@ -487,6 +506,37 @@ StructureSpawn.prototype.maintainRemoteMining = function(claimFlags) {
 
             return this.spawnForMining(source, limits);
           }, undefined);
+      }, undefined);
+  });
+};
+
+// Support / Boost
+StructureSpawn.prototype.maintainRemoteSupport = function(claimFlags) {
+  return everyTicks(10, () => {
+    return claimFlags
+      .reduce((creep, flag) => {
+        if (creep) { return creep; }
+        if (!flag.room) { return creep; }
+
+        const level = this.room.controller.level;
+        let limit = 0;
+
+        if (level === 8) {
+          // We support a claimed colony with 3 containers with 1 transport lorry
+          if (flag.secondaryColor === COLOR_GREEN) {
+            limit = 1;
+          }
+
+          let options = {
+            containerId: this.room.storage.id,
+            targetRoom: flag.room.name
+          };
+
+          // console.log(options.controllerId, limit);
+
+          // console.log(this.name, 'support');
+          return this.spawnFor('lorry', options, limit);
+        }
       }, undefined);
   });
 };
@@ -511,7 +561,8 @@ StructureSpawn.prototype.spawnForMining = function(source, limits = {}) {
   // TODO: add remote information
   let options = {
     sourceId,
-    containerId
+    containerId,
+    targetRoom: null
   };
 
   // if the source has no miner
@@ -717,6 +768,11 @@ StructureSpawn.prototype.bodyFor = function(role, options) {
   } else if (role === 'lorry') {
     // Max energy
     let energy = 1050;
+
+    //  && options.targetRoom
+    if (level === 8) {
+      energy = 2100;
+    }
     if (energy > energyCapacityAvailable) {
       energy = energyCapacityAvailable;
     }

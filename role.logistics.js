@@ -9,19 +9,43 @@ module.exports = function() {
 
   let underAttack = this.room.underAttack();
 
-  // Define the home
-  let homeName = Game.getObjectById(this.memory.controllerId).room.name;
-  // Define the claim
-  let claimName;
-  let source = Game.getObjectById(this.memory.sourceId);
-  // Only lorry are having sourceIds
-  if (source && source.room && this.isRole('lorry')) {
-    claimName = source.room;
+
+  let targetRoom;
+  let targetRoomName;
+
+  // console.log(this.memory.targetRoom);
+
+  if (this.memory.targetRoom) {
+    // console.log('moin');
+    targetRoom = Game.rooms[this.memory.targetRoom];
+    // return;
+
+    targetRoomName = targetRoom.name;
+
+    // Long distance (other room)
+    if (targetRoomName !== this.room.name) {
+      let ok = this.moveTo(targetRoom.controller);
+
+      // console.log(ok);
+
+      return;
+    }
   }
 
-  // Rooms which are not home or claim become no energy supply
+  // Define the home
+  let homeName  = Game.getObjectById(this.memory.controllerId).room.name;
+
+  // Define the claim
+  let claimName;
+  let container = Game.getObjectById(this.memory.containerId);
+  // Only lorry are having containerIds
+  if (container && container.room && this.isRole('lorry')) {
+    claimName = container.room.name;
+  }
+
+  // Rooms which are not home or claim get no energy supply
   // TODO: exeptions are thinkable
-  if ([homeName, claimName].includes(this.room.name)) {
+  if ([homeName, claimName, targetRoomName].includes(this.room.name)) {
 
     // If we are NOT under attack priorise spawn and extensions
     if (_.isEmpty(target) && !underAttack) {
@@ -66,8 +90,8 @@ module.exports = function() {
       }
     }
 
-    // Do we have a storage? (only in HOME)
-    if (_.isEmpty(target) && this.room.name === homeName) {
+    // Do we have a storage?
+    if (_.isEmpty(target)) {
       target = this.room.storage;
     }
   }

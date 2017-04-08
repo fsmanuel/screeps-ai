@@ -24,12 +24,6 @@ module.exports = function() {
     }
 
     if (_.isEmpty(target)) {
-      flag = this.room.find(FIND_FLAGS, {
-        filter: (f) => {
-          return f.color === COLOR_GREY && f.secondaryColor === COLOR_GREY;
-        }
-      })[0];
-
       this.moveTo(flag);
     }
 
