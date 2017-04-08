@@ -1,27 +1,40 @@
+// Destroyer
+let actAsBuilder = require('role.builder');
+
 module.exports = function() {
   let flag = Game.flags[this.memory.flagName];
+  let commando = flag.memory;
 
   if (flag && flag.pos.roomName !== this.room.name) {
     this.moveTo(flag, {
-      reusePath: 0
+      reusePath: 10
     });
   } else {
-    let radius = 0;// flag.memory.radius;
-    let target;
+    if(commando.operate) {
+      let target;
 
-    if (radius === 0) {
-      target = flag.pos.lookFor(LOOK_STRUCTURES)[0];
+      if(commando.tacticInfo.radius == 0) {
+          if (_.isEmpty(target)) {
+              target = flag.pos.lookFor(LOOK_STRUCTURES)[0];
+          }
+      } else {
+          let targets = flag.pos.findInRange(FIND_STRUCTURES, commando.tacticInfo.radius);
+          target = this.pos.findClosestByPath(targets);
+      }
+
+      if(this.dismantle(target) == ERR_NOT_IN_RANGE) {
+          this.moveTo(target);
+      }
+
+      if (_.isEmpty(target)) {
+        this.moveTo(flag);
+      }
     } else {
-      // TODO: Should be only enemies structures
-      let targets = flag.pos.findInRange(FIND_STRUCTURES, radius);
-      target = targets[0] //this.pos.findClosestByPath(targets);
-    }
-
-    if (_.isEmpty(target)) {
       this.moveTo(flag);
-    } else {
-      this.do('dismantle', target);
+
+      //TODO:
+      //let autoPilot = true;
+      //actAsBuilder.call(this, autoPilot);
     }
   }
-
 };

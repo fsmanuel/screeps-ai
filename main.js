@@ -18,11 +18,15 @@ module.exports.loop = function () {
   utilLoop.run();
 
   // Defend our world...
-  utilLoop.defendAndRepair();
+  utilLoop.defense();
 
   // TODO: Attack!
   utilLoop.attack();
 
   // TODO: We should probably spawn at the end of the tick?!
   utilLoop.spawn();
+
+  utilLoop.trade();
+
+  //utilLoop.test();
 };

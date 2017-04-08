@@ -1,73 +1,71 @@
-
 // Energy control
-StructureTower.prototype.engergyFactor = 0.75; // 0.25 0.75
+StructureTower.prototype.engergyFactor = 0.5; // 0.25 0.75
 
-StructureTower.prototype.defend = function() {
-  // find closes hostile creep
+StructureTower.prototype.repairInRoom = function() {
+  // stop repairing if energy is under level
+  if(this.energy < this.energyCapacity * this.engergyFactor) { return; }
 
-  // TODO: If no more MOVE parts let alone and kill later
+  // structure hits has to fall under the maximal tower reapair capability
+  const maxRepairValue = 800 * this.room.towers().length;
+  let maxWallHits = this.room.memory.defense.maxWallHits;
 
-  let target;
-
-  // First attack HEAL (TODO: can be dangerous)
-  target = this.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
-    filter: (enemy) => enemy.getActiveBodyparts(HEAL) > 0
-  });
-
-  // Then go for RANGED_ATTACK or ATTACK
-  if (!target) {
-    target = this.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
-      filter: (enemy) => {
-        return enemy.getActiveBodyparts(RANGED_ATTACK) > 0 ||
-          enemy.getActiveBodyparts(ATTACK) > 0
+  let targets = this.room.find(FIND_STRUCTURES, {
+    filter: (s) => {
+      if ([
+        STRUCTURE_RAMPART,
+        STRUCTURE_WALL
+      ].includes(s.structureType)) {
+        return s.hits < maxWallHits && s.hits < s.hitsMax;
+      } else {
+        return s.hitsMax - s.hits >= maxRepairValue;
       }
-    });
-  }
+    }
+  }).sort(sortByHits);
 
-  // Then go for ALL HOSTILE
-  if (!target) {
-    target = this.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
-  }
+  target = this.pos.findClosestByRange(targets);
 
-  // Attack!
   if (target) {
-    this.attack(target);
-  } else {
-    // Heal
-    let target = this.room.find(FIND_MY_CREEPS, {
-      filter: (creep) => {
-        return creep.hits < creep.hitsMax && this.pos.getRangeTo(creep) <= 35;
-      }
-    })[0];
-
-    if (target) {
-      this.heal(target);
-    }
-
-    // Repair
-    let maxWallHits = this.room.memory.maxWallHits;
-
-    // structure hits has to fall under the maximal tower reapair capability
-    const maxRepairValue = 800 * this.room.towers().length;
-
-    target = this.pos.findClosestByRange(FIND_STRUCTURES, {
-      filter: (s) => {
-        // TODO: STRUCTURE_RAMPART should be prioritized - maybe we should switch under the maxWallHits until they reach a sustainable limit
-        // return s.structureType === STRUCTURE_RAMPART && s.hits < maxWallHits
-
-        if ([
-          STRUCTURE_RAMPART,
-          STRUCTURE_WALL
-        ].includes(s.structureType)) {
-          return s.hits < maxWallHits && s.hits < s.hitsMax;
-        } else {
-          return s.hitsMax - s.hits >= maxRepairValue;
-        }
-      }
-    });
-
-    if (target) {
-      this.repair(target);
-    }
+    this.repair(target);
   }
+};
+
+StructureTower.prototype.attackInRoom = function(options = {}) {
+  let target;
+  let targets = this.room.findEnemies().sort(sortByHits);
+
+  // default: attack enemy with lowest hits
+  if(_.isEmpty(options)) {
+    target = this.pos.findClosestByRange(targets);
+
+    this.attack(target);
+
+  //attack spezial targets from fire-control
+  } else {
+    // attack priorized targets
+    if(!_.isEmpty(options.priorized)) {
+      let prio = options.priorized;
+
+      // attack the lowest hits target, not the nerarest TODO: good solution?
+      target = targets.find((target) => target.getActiveBodyparts(prio) > 0);
+    }
+
+    // attack a selected targets
+    if(!_.isEmpty(options.selected)) {
+      //TODO
+    }
+
+    // if no spezial target can found, attack the nearest other
+    if(_.isEmpty(target)) {
+      target = this.pos.findClosestByRange(targets);
+    }
+
+    this.attack(target);
+  }
+};
+
+let sortByHits = function(a, b) {
+  let aObject = a.hits;
+  let bObject = b.hits;
+
+  return aObject - bObject;
 };

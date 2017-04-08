@@ -24,11 +24,13 @@ module.exports = function() {
     }
   }
 
-  let enemies = target.pos.findInRange(FIND_HOSTILE_CREEPS, 4);
+  let hostileCreeps = this.room.findEnemies();
+  let enemies = target.pos.findInRange(hostileCreeps, 48);
   let enemy = this.pos.findClosestByRange(enemies);
 
   // Everyone in the room but no enemy
   if (phase === 3 && _.isEmpty(enemy)) {
+    //TODO: this includes attacks against allies
     let enemies = flag.pos.findInRange(FIND_STRUCTURES, 1);
     enemy = this.pos.findClosestByPath(enemies);
   }

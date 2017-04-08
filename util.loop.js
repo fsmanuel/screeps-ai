@@ -1,8 +1,10 @@
 const Logger = require('class.logger');
 const Tree = require('class.tree');
+const utilControl = require('util.control');
 
 const {
-  everyTicks
+  everyTicks,
+  everyTicksFor
 } = require('util.helpers');
 
 const runOrder = {
@@ -61,6 +63,8 @@ module.exports = {
   },
 
   setup() {
+    utilControl.config();
+
     // Convert flags to an array
     this.flagsToArray();
 
@@ -93,18 +97,12 @@ module.exports = {
         room.drawStreetMap();
 
         // Lorries
-        // room.optimizeSourceContainers();
+        room.optimizeSourceContainers();
       });
-
   },
 
   // Spawn
   spawn() {
-    // Select all fully controlled rooms
-    let controlledRooms = _
-      .values(Game.rooms)
-      .filter(room => room.controller.my == true)
-
     // Collect creeps population governed by the controller aka census
     this.tree.invoke(function(node) {
       node.controller().collectCreepsData();
@@ -140,98 +138,167 @@ module.exports = {
       });
   },
 
-  defendAndRepair() {
-    // Increase walls
-    const time = 400;
-    everyTicks(time, function() {
-      _
-        .toArray(Game.rooms)
-        .forEach((room) => {
-          // Set initial wall hits
-          if (!room.memory.maxWallHits && room.isStronghold()) {
-            room.memory.maxWallHits = 1000;
-          }
+  defense() {
+    let colonys = this.empire();
 
-          if (room.memory.maxWallHits < 4000000) {
-              var oldLimit = room.memory.maxWallHits;
-              const base = 1000;
+    colonys.forEach(function(colony){
+      let defcon = colony.defcon();
 
-              let walls = room.walls().length;
+      if(colony.isStronghold()) {
+        colony.upgradeDefense(defcon);
+      }
 
-              // We increase the added value by controller level
-              if (room.controller.level == 4) {
-                  let value = Math.floor((time / 8) / walls) * base;
-
-                  room.memory.maxWallHits += value;
-              }
-              else if (room.controller.level >= 5) {
-                  let value = Math.floor((time / 4) / walls) * base;
-
-                  room.memory.maxWallHits += value;
-              } else {
-                // Level 1 - 3
-                room.memory.maxWallHits += base;
-              }
-
-              Logger.log(
-                'Increased walls in', room.name,
-                ' from', oldLimit,
-                ' to:', room.memory.maxWallHits
-              );
-          }
-        });
+      colony.stationaryFireControl(defcon);
     });
-
-    _
-      .toArray(Game.structures)
-      .filter(s => s.structureType === STRUCTURE_TOWER)
-      .forEach((tower) => {
-        // TODO: WAR - Add war mode aka factor = 1
-        // TODO: If the energy level is too low set to 0.25 or 0 (collect from rooms)
-        tower.defend()
-      });
   },
 
-  // Two flags are needed  (crusade and crusadeWithdrawal)
   attack() {
-    let targetName = 'crusade';
-    let withdrawalName = 'crusadeWithdrawal';
+    // Light Bowman
 
-    let crusadeFlag = Game.flags[targetName];
+    this.attackFlags.forEach((flag) => {
+      if(!flag.memory.setUp) {
+        let lightBowmanFlags = this.attackFlags.filter((flag) => {
+          flag.memory.tactic === 'offensiveArcher'
+        });
+        if(flag.memory.tactic === 'offensiveArcher' && !flag.memory.setUp) {
+          // basic setup
+          flag.memory = {
+            tactic : 'offensiveArcher',
+            order : lightBowmanFlags.length + 1,
+            setUp : true,
+            active : false,
+            operate : false,
+            targetFlagName : null,
+            activeUnits : {
+              lightBowman : []
+            },
+            requiredUnits : {
+              lightBowman : 1
+            }
+          }
+        }
+      }
+    });
 
-    // tacticConfig = {
-    //   sabotageWithDeathblow: {
-    //     phase: 1,
-    //     spawning: false,
-    //     unitLimits: {
-    //       monk: 4,
-    //       melee: 4
-    //     },
-    //     unitTypes : {
-    //       monk : [],
-    //       melee : []
-    //     },
-    //
-    //
-    //   }
-    // }
-    // destroy = active : false, tactic : destroy, limit : 2, radius : 0, targetType : [ALL, HOSTILE]
-    if (crusadeFlag) {
-        if (!crusadeFlag.memory.setUp) {
+    // Heavy Bowman
+
+    this.attackFlags.forEach((flag) => {
+      if(!flag.memory.setUp) {
+        let heavyBowmanFlags = this.attackFlags.filter((flag) => {
+          flag.memory.tactic === 'defensivArcher'
+        });
+        if(flag.memory.tactic === 'defensivArcher' && !flag.memory.setUp) {
+          // basic setup
+          flag.memory = {
+            tactic : 'defensivArcher',
+            order : heavyBowmanFlags.length + 1,
+            setUp : true,
+            active : false,
+            operate : false,
+            targetFlagName : null,
+            activeUnits : {
+              heavyBowman : []
+            },
+            requiredUnits : {
+              heavyBowman : 1
+            }
+          }
+        }
+      }
+    });
+
+    // Manguadai
+
+    const timeMangudai = _.random(1500, 2500);
+    everyTicks(timeMangudai, function() {
+      // Game.flags['mangudai_1'].memory.requiredUnits.mangudai = 1;
+      // Game.flags['mangudai_2'].memory.requiredUnits.mangudai = 1;
+    });
+
+    this.attackFlags.forEach((flag) => {
+      // Setup
+      if(!flag.memory.setUp) {
+        // Raid with Mangudai
+        let raidFlags = this.attackFlags.filter((flag) => flag.memory.tactic === 'raid');
+        if(flag.memory.tactic === 'raid' && !flag.memory.setUp) {
+          // basic setup
+          flag.memory = {
+            tactic : 'raid',
+            order : raidFlags.length,
+            setUp : true,
+            active : false,
+            operate : false,
+            targetFlagName : null,
+            victim : ['gastraph'],
+            activeUnits : {
+              mangudai : []
+            },
+            requiredUnits : {
+              mangudai : 1
+            },
+            operationalArea : {},
+            history: []
+          }
+          // detailed setup
+          if(flag.memory.order === 1) {
+            flag.memory.operationalArea = {
+              startBase : ['W83N6'],
+              homeBases : ['W83N6', 'W83N9'],
+              withdrawalRooms : ['W89N6', 'W86N6', 'W85N6', 'W84N6', 'W89N5', 'W88N5', 'W87N5',
+               'W86N5', 'W85N5', 'W90N5', 'W90N6', 'W90N7', 'W90N8', 'W90N9', 'W90N10', 'W89N10',
+               'W88N10', 'W87N10', 'W86N10', 'W85N10', 'W84N10', 'W83N10'],
+              attackRooms : ['W88N9', 'W87N9', 'W85N9', 'W84N9', 'W89N8', 'W88N8', 'W87N8',
+               'W86N8', 'W85N8', 'W89N7', 'W87N7', 'W86N7', 'W85N7', 'W87N6'],
+              enemyBases : ['W89N9', 'W86N9', 'W88N7']
+            }
+          }
+          if(flag.memory.order === 2) {
+            flag.memory.operationalArea = {
+              startBase : ['W83N6'],
+              homeBases : ['W83N6', 'W83N9'],
+              withdrawalRooms : ['W89N6', 'W86N6', 'W85N6', 'W84N6', 'W89N5', 'W88N5', 'W87N5',
+               'W86N5', 'W85N5', 'W90N5', 'W90N6', 'W90N7', 'W90N8', 'W90N9', 'W90N10', 'W89N10',
+               'W88N10', 'W87N10', 'W86N10', 'W85N10', 'W84N10', 'W83N10'],
+              attackRooms : ['W88N9', 'W87N9', 'W85N9', 'W84N9', 'W89N8', 'W88N8', 'W87N8',
+               'W86N8', 'W85N8', 'W89N7', 'W87N7', 'W86N7', 'W85N7', 'W87N6'],
+              enemyBases : ['W89N9', 'W86N9', 'W88N7']
+            }
+          }
+        }
+      // Update Units
+      } else {
+        for(let type in flag.memory.activeUnits) {
+            for(let u in type) {
+                let creepName = flag.memory.activeUnits[type][u];
+                if(!Game.creeps[creepName]) {
+                    flag.memory.activeUnits[type].splice(u, 1);
+                }
+            }
+        }
+      }
+    });
+
+    // Crusade
+
+    let crusadeFlag = Game.flags['crusade'];
+    let crusadeWithdrawalFlag = Game.flags['crusadeWithdrawal'];
+
+    if(crusadeFlag){
+        if(!crusadeFlag.memory.setUp) {
             crusadeFlag.memory = {
                 setUp : true,
                 active : false,
                 //goal : 'conquest',
                 tactic : 'sabotageWithDeathblow',
                 tacticalPhase : 1,
-                tacticalWithdrawalTo : withdrawalName,
+                tacticalWithdrawalTo : 'crusadeWithdrawal',
                 //attackerRooms : ['W83N9', 'W83N8'],
                 //supporterRooms : [],
                 unitTypes : {
-                    monk : [],
+                    pawnSacrifice : [],
                     melee : []
                 },
-                monkLimit : 4,
+                pawnLimit : 4,
                 meleeLimit : 4
             }
         } else {
@@ -239,20 +306,94 @@ module.exports = {
             for(let type in crusadeFlag.memory.unitTypes) {
                 for(let u in type) {
                     let creepName = crusadeFlag.memory.unitTypes[type][u];
-                    if (!Game.creeps[creepName]) {
-
-                      // We need it for the migration
-                      // if (type === 'monk') {
-                      //   // delete crusadeFlag.memory.unitTypes[type]
-                      //                         crusadeFlag.memory.unitTypes[type] = crusadeFlag.memory.unitTypes[type] || [];
-                      // }
-
+                    if(!Game.creeps[creepName]) {
                         crusadeFlag.memory.unitTypes[type].splice(u, 1);
                     }
                 }
             }
         }
     }
+
+    // Destroyer
+
+    let destroyFlag = Game.flags['destroy'];
+
+    if(destroyFlag) {
+      if(!destroyFlag.memory.setUp) {
+        destroyFlag.memory =  {
+          setUp : true,
+          active : false,
+          operate : false,
+          tactic : 'destroy',
+          tacticInfo : {
+            targetType : 'ALL',
+            radius : 0
+          },
+          activeUnits : {
+            destroyer : []
+          },
+          requiredUnits : {
+            destroyer : 1
+          },
+          requiredStrength : {
+            destroyer : 'moderate' // low, moderate, high, ultra
+          },
+        }
+      } else {
+        // update
+        for(let type in destroyFlag.memory.activeUnits) {
+          for(let u in type) {
+            let creepName = destroyFlag.memory.activeUnits[type][u];
+            if(!Game.creeps[creepName]) {
+                destroyFlag.memory.activeUnits[type].splice(u, 1);
+            }
+          }
+        }
+      }
+    }
+  },
+
+  trade() {
+    let colonys = this.empire();
+    everyTicksFor(50, colonys, function(colonys) {
+
+      colonys.forEach(function(colony){
+        let terminal = colony.terminal;
+
+        if(terminal) {
+          colony.controller.trade();
+        }
+      });
+    });
+  },
+
+  test() {
+    let colonys = this.empire();
+    everyTicksFor(1, colonys, function(colonys) {
+      colonys.forEach(function(colony) {
+        let observer = colony.find(FIND_MY_STRUCTURES, {
+          filter: (s) => {
+            return s.structureType === STRUCTURE_OBSERVER
+          }
+        })[0];
+
+        if(observer) {
+          let roomName = 'W84N1';
+          observer.observeRoom(roomName);
+
+          if(Game.rooms[roomName]) {
+            let room = Game.rooms[roomName];
+
+            //const USERNAME_WHITELIST = allies;
+            let creeps = room.findEnemies();
+
+            console.log(creeps);
+          } else {
+            console.log('Room is not visible');
+          }
+        }
+      });
+    });
   },
 
   // Helper
@@ -295,5 +436,9 @@ module.exports = {
           // Logger.log('Clearing non-existing creep memory:', creep);
         }
       });
+  },
+
+  empire() {
+    return _.values(Game.rooms).filter(room => room.isColony());
   }
 };

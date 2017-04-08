@@ -3,16 +3,21 @@ let runList = {
   logistics: require('role.logistics'),
   lorry: require('role.logistics'),
   upgrader: require('role.upgrader'),
-  explorer: require('role.explorer')
+  explorer: require('role.explorer'),
+  distributor: require('role.distributor')
 };
 
 let claimerRun = require('role.claimer');
 let defenderRun = require('role.defender');
 let minerRun = require('role.miner');
+let mineralizerRun = require('role.mineralizer');
 
 let monkRun = require('role.monk');
 let meleeRun = require('role.melee');
 let destroyerRun = require('role.destroyer');
+let mangudaiRun = require('role.mangudai');
+let heavyBowmanRun = require('role.heavyBowman');
+let lightBowmanRun = require('role.lightBowman');
 
 const {
   rememberTo
@@ -24,11 +29,30 @@ Creep.prototype.run = function() {
   let role = this.memory.role;
   let isWorking = this.memory.working;
   let energy = this.carry.energy;
+  let carry = _.sum(this.carry);
 
   // TODO: Every creep has to visit this every tick!
   this.room.visitPosition(this);
 
   // This roles have special tasks and don't need the working flag
+
+  // Light Bowman - Run for it!
+  if (this.isRole('lightBowman')) {
+    lightBowmanRun.call(this);
+    return;
+  }
+
+  // Heavy Bowman - Run for it!
+  if (this.isRole('heavyBowman')) {
+    heavyBowmanRun.call(this);
+    return;
+  }
+
+  // Mangudai - Run for it!
+  if (this.isRole('mangudai')) {
+    mangudaiRun.call(this);
+    return;
+  }
 
   // Defender - Run for it!
   if (this.isRole('defender')) {
@@ -66,11 +90,17 @@ Creep.prototype.run = function() {
     return;
   }
 
+  // Mineralizers don't use the working flag because they don't need energy
+  if (this.isRole('mineralizer')) {
+    mineralizerRun.call(this);
+    return;
+  }
+
   // TODO: Move into setupRun
   if (
     isWorking !== undefined && (
-      isWorking && energy === 0 ||
-      !isWorking && energy === this.carryCapacity
+      isWorking && carry === 0 ||
+      !isWorking && carry === this.carryCapacity
     )
   ) {
     if (this.memory.working === true) {
@@ -80,13 +110,17 @@ Creep.prototype.run = function() {
     }
   }
 
-  // console.log(role, isWorking);
-
   // Aka collect energy
   if (!isWorking) {
     // Collect droped energy
     if (this.collectDroppedEnergy() === OK) {
       return;
+    }
+
+    if(this.memory.role === 'distributor') {
+      if(this.collectDroppedResource() === OK) {
+        return;
+      }
     }
 
     // Get energy from container and source
@@ -95,12 +129,33 @@ Creep.prototype.run = function() {
 
     // Get energy from container and source
     // TODO: It should take the closest!
-    } else if (['explorer', 'logistics'].includes(role)) {
+    } else if (role === 'explorer') {
       this.getEnergy(true, true);
+
+    // Get energy from source
+    } else if (role === 'logistics') {
+      this.getEnergy(false, true);
 
     // Get energy from container
     } else if (role === 'lorry') {
       this.getEnergy(true, false, { containerId: this.memory.containerId });
+
+    // Get energy from container
+    } else if (role === 'distributor') {
+      if(this.room.hasExtractor()) {
+        let mineral = this.room.mineral();
+        let container = mineral.nearContainers()[0];
+        if (
+          container &&
+          container.store[mineral.mineralType] >= this.carryCapacity*(3/4)
+        ) {
+          this.do('withdraw', mineral.nearContainers()[0], mineral.mineralType);
+        } else {
+          this.getEnergy(true, false, { containerId: this.memory.containerId });
+        }
+      } else {
+        this.getEnergy(true, false, { containerId: this.memory.containerId });
+      }
     }
   }
 
@@ -112,6 +167,7 @@ Creep.prototype.run = function() {
 
 Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
   let container;
+  let amount;
 
   // if the Creep should look for containers
   if (useContainer) {
@@ -124,13 +180,14 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
     // find closest container
     } else {
       const soloContainerIds = this.room.memory.soloContainerIds;
+      let capacity = this.carryCapacity - _.sum(this.carry);
 
       container = this.pos.findClosestByPath(FIND_STRUCTURES, {
         filter: (s) => {
           let match = [
               STRUCTURE_CONTAINER,
               STRUCTURE_STORAGE
-            ].includes(s.structureType) && s.store[RESOURCE_ENERGY] >= this.carryCapacity;
+            ].includes(s.structureType) && s.store[RESOURCE_ENERGY] >= capacity;
 
           // Only get energy from solo containers
           if (
@@ -156,12 +213,14 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
         if (yellowFlag && !this.pos.isEqualTo(yellowFlag.pos)) {
           this.moveTo(yellowFlag);
         }
+
+        // prevent lorries from withdraw every tick
+        let capacity = this.carryCapacity - _.sum(this.carry);
+        amount = capacity <= 2000 ? capacity : 2000;
       }
 
-      if (container.store.energy >= this.carryCapacity) {
-        // Go get it!
-        this.do('withdraw', container, RESOURCE_ENERGY);
-      }
+      // Done!
+      this.do('withdraw', container, RESOURCE_ENERGY, amount);
     }
   }
 
@@ -177,13 +236,29 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
 };
 
 Creep.prototype.collectDroppedEnergy = function() {
-  let energy = this.pos.findInRange(FIND_DROPPED_ENERGY, 3)[0];
+  let droppedEnergy = this.room.find(FIND_DROPPED_ENERGY, {
+    filter: (d) => d.resourceType === 'energy'
+  });
+
+  if(!_.isEmpty(droppedEnergy)) {
+    let energy = this.pos.findInRange(droppedEnergy, 3)[0];
+    let value = this.carryCapacity / 10;
+    value = value > 10 ? value : 10;
+
+    if (energy && energy.amount > value) {
+      return this.do('pickup', energy);
+    }
+  }
+};
+
+Creep.prototype.collectDroppedResource = function() {
+  let mineral = this.pos.findInRange(FIND_DROPPED_RESOURCES, 3)[0];
 
   let value = this.carryCapacity / 10;
   value = value > 10 ? value : 10;
 
-  if (energy && energy.amount > value) {
-    return this.do('pickup', energy);
+  if (mineral && mineral.amount > value) {
+    return this.do('pickup', mineral);
   }
 };
 
@@ -195,8 +270,8 @@ Creep.prototype.shouldResumeWork = function() {
   }
 };
 
-Creep.prototype.do = function(action, target, type = null) {
-  let task = this[action](target, type);
+Creep.prototype.do = function(action, target, type = null, amount = null) {
+  let task = this[action](target, type, amount);
 
   // Make the creep more efficient by preventing idle time
   if (action === 'withdraw' && task === ERR_NOT_ENOUGH_RESOURCES) {
@@ -218,4 +293,37 @@ Creep.prototype.do = function(action, target, type = null) {
 
 Creep.prototype.isRole = function(name) {
   return this.memory.role === name;
+};
+
+Creep.prototype.isControlledBy = function(controllerId) {
+  return this.memory.controllerId === controllerId;
+};
+
+Creep.prototype.getAbilityOf = function(type) {
+  let boost = {
+    heal : {
+      'LO' : 2,
+      'LHO2' : 3,
+      'XLHO2' : 4
+    }
+  };
+
+  let body = this.body;
+  let ability = 0;
+
+  body.forEach((element) => {
+    // creeps has the bodyPart type
+    if(element.type === type) {
+      // with no boost
+      if(_.isEmpty(element.boost)) {
+        ability += 1;
+      }
+      // with boost
+      else {
+        ability += boost[element.type][element.boost];
+      }
+    }
+  });
+
+  return ability;
 };

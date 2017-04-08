@@ -11,3 +11,7 @@ RoomObject.prototype.nearStorage = function(distance = 1) {
     filter: s => s.structureType === STRUCTURE_STORAGE
   })[0];
 };
+
+RoomObject.prototype.hasCapacity = function(amount = 1) {
+  return this.storeCapacity > _.sum(this.store) + amount;
+};

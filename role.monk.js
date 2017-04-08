@@ -1,5 +1,6 @@
 function moveTo(target) {
-  let enemies = this.pos.findInRange(FIND_HOSTILE_CREEPS, 3);
+  let hostileCreeps = this.room.findEnemies();
+  let enemies = this.pos.findInRange(hostileCreeps, 3);
 
   if (enemies) {
     let enemy = this.pos.findClosestByRange(enemies);
@@ -33,7 +34,7 @@ module.exports = function() {
   let flag = Game.flags[this.memory.flagName];
   let withdrawalFlag = Game.flags[flag.memory.tacticalWithdrawalTo];
 
-  if (flag.memory.tacticalPhase === 1) {
+  if (flag.memory.tacticalPhase == 1) {
     // Safty first!
     if (
       damage <= allowedDamageValue || (
