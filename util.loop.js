@@ -1,4 +1,6 @@
 const Logger = require('class.logger');
+const Tree = require('class.tree');
+
 const {
   everyTicks
 } = require('util.helpers');
@@ -17,6 +19,47 @@ const sortByRunOrder = function(a, b) {
 };
 
 module.exports = {
+  buildTree() {
+    let unresolvedNodes = [];
+
+    // Root node
+    let room = _
+      .values(Game.rooms)
+      .find((room) => {
+        let flag = room.find(FIND_FLAGS, { filter: f => f.memory.controllerId })
+        return _.isEmpty(flag) && room.controller.my === true;
+      });
+
+    let tree = new Tree(room.controller.id);
+
+    _
+      .values(Game.rooms)
+      .forEach((room) => {
+        let flag = room.find(FIND_FLAGS, { filter: f => f.memory.controllerId })
+
+        if (!_.isEmpty(flag)) {
+          let id = flag[0].room.controller.id;
+          let parentId = flag[0].memory.controllerId;
+
+          let node = tree.add(id, parentId);
+
+          if (!node) {
+            // console.log(id, parentId);
+            unresolvedNodes.push([id, parentId]);
+          }
+        }
+      });
+
+    // console.log(JSON.stringify(tree, tree._stringify));
+
+    // console.log(unresolvedNodes);
+    tree.resolve(unresolvedNodes);
+
+    // console.log(JSON.stringify(tree, tree._stringify));
+
+    this.tree = tree;
+  },
+
   setup() {
     // Convert flags to an array
     this.flagsToArray();
@@ -24,7 +67,11 @@ module.exports = {
     // TODO: Find a way to run it everyTicks (we can not save it in memory!)
     this.updateClaims();
 
+    // console.log(JSON.stringify(this.claims));
+
     this.updateFlags();
+
+    this.buildTree();
 
     // If enemies are detected set flags
     // TODO: We can do it every 5 ticks
@@ -34,20 +81,21 @@ module.exports = {
     this.cleanup();
 
     // Room information
-      _
-        .values(Game.rooms)
-        .forEach((room) => {
-          everyTicks(100, () => {
-            // Structural data
-            room.updateStructuralData();
-          });
-
-          // Street maps
-          room.drawStreetMap();
-
-          // Lorries
-          room.optimizeSourceContainers();
+    _
+      .values(Game.rooms)
+      .forEach((room) => {
+        everyTicks(150, () => {
+          // Structural data
+          room.updateStructuralData();
         });
+
+        // Street maps
+        room.drawStreetMap();
+
+        // Lorries
+        // room.optimizeSourceContainers();
+      });
+
   },
 
   // Spawn
@@ -58,18 +106,25 @@ module.exports = {
       .filter(room => room.controller.my == true)
 
     // Collect creeps population governed by the controller aka census
-    controlledRooms.forEach((room) => {
-        room.controller.collectCreepsData();
-    });
+    this.tree.invoke(function(node) {
+      node.controller().collectCreepsData();
+    }, this.tree.traverseDF);
+
+    // TODO: Move into tree
+    let claims = this.claims;
+    let defendFlags = this.defendFlags;
+    let attackFlags = this.attackFlags;
 
     // Then we autoSpawnCreeps
-    controlledRooms.forEach((room) => {
-      room.controller.autoSpawnCreeps(
-        this.claims,
-        this.defendFlags,
-        this.attackFlags
+    this.tree.invoke(function(node) {
+      // console.log(node.controller().id);
+
+      node.controller().autoSpawnCreeps(
+        claims,
+        defendFlags,
+        attackFlags
       );
-    });
+    }, this.tree.traverseDF);
   },
 
   run() {
@@ -97,7 +152,7 @@ module.exports = {
             room.memory.maxWallHits = 1000;
           }
 
-          if (room.memory.maxWallHits < 3000000) {
+          if (room.memory.maxWallHits < 4000000) {
               var oldLimit = room.memory.maxWallHits;
               const base = 1000;
 
