@@ -1,33 +1,17 @@
 module.exports = {
   config() {
-    global.ME = 'fsmanuel';
-    global.allies = [global.me, 'pirx'];
+    // TODO: Add your name
+    global.ME = 'YOURNAME';
+    global.allies = [global.me, 'pirx', 'fsmanuel'];
 
     const empire = {
-      W82N3: {
-        defense: {
-          finalWallHits: 5000000,
-          explorerEfficiency: 0.65
-        }
-      },
-      W82N4: {
-        defense: {
-          finalWallHits: 5000000,
-          explorerEfficiency: 0.9
-        }
-      },
-      W81N5: {
-        defense: {
-          finalWallHits: 5000000,
-          explorerEfficiency: 0.9
-        }
-      },
-      W83N2: {
-        defense: {
-          finalWallHits: 500000,
-          explorerEfficiency: 0.6
-        }
-      }
+      // TODO: Add your rooms
+      // W82N3: {
+      //   defense: {
+      //     finalWallHits: 5000000,
+      //     explorerEfficiency: 0.65
+      //   }
+      // },
     };
 
     for(let colony of Object.keys(empire)) {
