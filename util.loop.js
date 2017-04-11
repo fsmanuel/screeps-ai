@@ -29,7 +29,9 @@ module.exports = {
       .values(Game.rooms)
       .find((room) => {
         let flag = room.find(FIND_FLAGS, { filter: f => f.memory.controllerId })
-        return _.isEmpty(flag) && room.controller.my === true;
+        return _.isEmpty(flag) &&
+          room.controller &&
+          room.controller.my === true;
       });
 
     let tree = new Tree(room.controller.id);
@@ -105,7 +107,9 @@ module.exports = {
   spawn() {
     // Collect creeps population governed by the controller aka census
     this.tree.invoke(function(node) {
-      node.controller().collectCreepsData();
+      if (node.room.hasSpawns()) {
+        node.controller.collectCreepsData();
+      }
     }, this.tree.traverseDF);
 
     // TODO: Move into tree
@@ -115,13 +119,15 @@ module.exports = {
 
     // Then we autoSpawnCreeps
     this.tree.invoke(function(node) {
-      // console.log(node.controller().id);
+      // console.log(node.controller.id);
 
-      node.controller().autoSpawnCreeps(
+      node.controller.autoSpawnCreeps(
         claims,
         defendFlags,
         attackFlags
       );
+
+      node.runJobCenter();
     }, this.tree.traverseDF);
   },
 

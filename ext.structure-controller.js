@@ -44,7 +44,12 @@ StructureController.prototype.collectCreepsData = function() {
 
   // Show population per spawn
   everyTicks(100, () => {
-    Logger.log(this.room.name , JSON.stringify(this.creepsCounts));
+    let creepsCounts = Object
+      .keys(this.creepsCounts)
+      .sort()
+      .map((key) => `${key}: ${this.creepsCounts[key]}`);
+
+    Logger.log(this.room.name , JSON.stringify(creepsCounts));
   });
 };
 
@@ -105,6 +110,7 @@ StructureController.prototype.trade = function() {
     } else {
       Logger.log(
         'no deal for', roomMineralType,
+        'amount', amount,
         'because of', response
       );
     }

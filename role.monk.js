@@ -22,7 +22,9 @@ function moveTo(target) {
     this.heal(this);
   }
 
-  this.moveTo(target);
+  if (!this.pos.isNearTo(target)) {
+    this.moveTo(target);
+  }
 }
 
 module.exports = function() {

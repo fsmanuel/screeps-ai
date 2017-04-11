@@ -1,4 +1,6 @@
 module.exports = function() {
+  this.notifyWhenAttacked(false);
+
   let flag = Game.flags[this.memory.flagName];
 
   if (flag && flag.pos.roomName !== this.room.name) {
@@ -10,7 +12,7 @@ module.exports = function() {
     let hostileCreeps = this.room.findEnemies();
     let target = this.pos.findClosestByRange(hostileCreeps);
 
-    if (_.isEmpty(target)) {
+    if (_.isEmpty(target) && !this.pos.isNearTo(flag)) {
       this.moveTo(flag);
     }
 

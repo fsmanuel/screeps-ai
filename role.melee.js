@@ -25,7 +25,7 @@ module.exports = function() {
   }
 
   let hostileCreeps = this.room.findEnemies();
-  let enemies = target.pos.findInRange(hostileCreeps, 48);
+  let enemies = target.pos.findInRange(hostileCreeps, 6);
   let enemy = this.pos.findClosestByRange(enemies);
 
   // Everyone in the room but no enemy
@@ -38,7 +38,7 @@ module.exports = function() {
   // Right next to you!
   this.attack(enemy);
 
-  if (_.isEmpty(enemy)) {
+  if (_.isEmpty(enemy) && !this.pos.isNearTo(target)) {
     this.moveTo(target);
   } else {
     this.do('attack', enemy);
