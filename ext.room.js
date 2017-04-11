@@ -9,6 +9,18 @@ const {
 
 Room.prototype.rememberToFor = rememberToFor;
 
+Room.prototype.alliedUnits = function() {
+  return this.find(FIND_HOSTILE_CREEPS, {
+     filter: (c) => {
+         return (allies.indexOf(c.owner.username.toLowerCase()) > -1);
+     }
+  });
+}
+
+Room.prototype.hasAlliedUnits = function() {
+  return !_.isEmpty(this.alliedUnits());
+};
+
 Room.prototype.constructionSites = function() {
   return this.find(FIND_MY_CONSTRUCTION_SITES);
 };
@@ -57,6 +69,12 @@ Room.prototype.hasExtractor = function() {
 
 Room.prototype.mineral = function() {
   return this.find(FIND_MINERALS)[0];
+};
+
+Room.prototype.ramparts = function() {
+  return this.find(FIND_MY_STRUCTURES, {
+    filter: s => s.structureType === STRUCTURE_RAMPART
+  });
 };
 
 Room.prototype.spawns = function() {
@@ -199,16 +217,16 @@ Room.prototype.visitPosition = function(creep) {
 };
 
 Room.prototype.drawStreetMap = function() {
-  if (this.name !== 'W83N6') { return; }
-  _
-  .forEach(this.memory.streetMap, (value, x) => {
-    _.forEach(value, (value, y) => {
-      this.visual.rect(parseInt(x) - 0.5, parseInt(y) - 0.5, 1, 1, {
-        fill: 'red',
-        opacity: value / 50
-      })
-    })
-  })
+  // if (this.name !== 'W83N6') { return; }
+  // _
+  // .forEach(this.memory.streetMap, (value, x) => {
+  //   _.forEach(value, (value, y) => {
+  //     this.visual.rect(parseInt(x) - 0.5, parseInt(y) - 0.5, 1, 1, {
+  //       fill: 'red',
+  //       opacity: value / 50
+  //     })
+  //   })
+  // })
 };
 
 Room.prototype.optimizeSourceContainers = function() {
@@ -291,22 +309,9 @@ Room.prototype.defcon = function() {
     Memory.rooms[roomName].defcon = defcon;
   }
 
-  //TRASH
-    // bring melee support
-    if(defcon == 0 ||defcon == 1) {
-        Game.flags['crusade'].memory.meleeLimit = 0;
-    }
+  //TODO: Add a strategie for defense units
 
-    // end melee support
-    if(defcon == 2) {
-        Game.flags['crusade'].memory.meleeLimit = 9;
-    }
-
-    // TODO
-    // save mode WARNIG WARNIG if new wall === safeMode
-    // if(this.walls().some((w) => w.hits < 10000)) {
-    //     this.controller.activateSafeMode();
-    // }
+  //TODO: Add a strategy for SafeMode
 
   return defcon;
 };
@@ -368,6 +373,50 @@ Room.prototype.upgradeDefense = function(defcon, options={}) {
       );
     }
   });
+};
+
+Room.prototype.handleGates = function() {
+  let ramparts = this.ramparts();
+  let alliedUnits = this.alliedUnits();
+
+  // are allied units in this room
+  if(!_.isEmpty(alliedUnits)) {
+    let hostileCreeps = this.findEnemies();
+
+    // but enemies too
+    if(!_.isEmpty(hostileCreeps)) {
+      // check if the gate is safe (no enemy near by)
+      ramparts.forEach((rampart) => {
+        let safe = hostileCreeps.forEach((enemy) => {
+          return enemy.pos.inRangeTo(rampart, 2);
+        });
+
+        // handle gate
+        if(safe && !rampart.isPublic) {
+          rampart.setPublic(true);
+        }
+        else if(rampart.isPublic){
+          rampart.setPublic(false);
+        }
+      });
+    }
+    // and NO enemies --> open all gates
+    else {
+      ramparts.forEach((rampart) => {
+        if(!rampart.isPublic) {
+          rampart.setPublic(true);
+        }
+      });
+    }
+  }
+  // NO allies in this room --> check if all gates are closed
+  else {
+    ramparts.forEach((rampart) => {
+      if(rampart.isPublic) {
+        rampart.setPublic(false);
+      }
+    });
+  }
 };
 
 Room.prototype.stationaryFireControl = function(defcon) {

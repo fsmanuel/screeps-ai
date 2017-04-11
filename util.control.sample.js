@@ -1,8 +1,8 @@
 module.exports = {
   config() {
-    // TODO: Add your name
+    // TODO: Add your name (in capital and lower case letters)
     global.ME = 'YOURNAME';
-    global.allies = [global.me, 'pirx', 'fsmanuel'];
+    global.allies = ['pirx', 'fsmanuel'];
 
     const empire = {
       // TODO: Add your rooms

@@ -1,7 +1,6 @@
 const Logger = require('class.logger');
 const {
   everyTicks,
-  everyTicksFor,
   generateId,
   rememberTo,
   rememberToFor
@@ -55,10 +54,8 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags, att
   if (newCreep) { return newCreep; }
 
   // Upgrader
-  everyTicksFor(100, this, function(spawn) {
-    newCreep = spawn.maintainLocalUpgrader();
-    if (newCreep) { return newCreep; }
-  });
+  newCreep = this.maintainLocalUpgrader();
+  if (newCreep) { return newCreep; }
 
   // MineralMiner
   newCreep = this.maintainLocalMineralizer();
@@ -355,17 +352,34 @@ StructureSpawn.prototype.maintainLocalUpgrader = function() {
   let limit = 0;
 
   const level = this.room.controller.level;
-  const storage = this.room.controller.nearStorage(4);
   const containers = this.room.controller.nearContainers(4);
 
-  // If we have a storage near the controller
-  if(!_.isEmpty(storage)) {
+  // If we have a container near the controller
+  if(!_.isEmpty(containers)) {
+    everyTicks(100, function() {
+      // TODO: If there are more than one container
+      let containerEnergy = containers[0].store[RESOURCE_ENERGY];
+
+      // TODO: revision
+      if(containerEnergy > 1333) {
+        let upgrader = this.room.find(FIND_MY_CREEPS, {
+          filter: (c) => c.isControlledBy(this.room.controller.id) && c.isRole('upgrader')
+        });
+        // 1333 results from the 'carry + carry * 1/3' condition of logistics (at 500 carryCap)
+        limit = 1 + upgrader.length;
+      }
+    });
+  }
+  // If we have NO container near controller, use the storage
+  else {
+    const storage = this.room.storage;
+
+    if (_.isEmpty(storage)) { return; }
+
     let storageEnergy = storage.store[RESOURCE_ENERGY];
     let energyReserve = this.room.memory.economy.reserve;
 
-    if(storageEnergy < energyReserve) {
-      return;
-    }
+    if(storageEnergy < energyReserve) { return; }
 
     // we build at least one upgrader
     limit = 1;
@@ -382,19 +396,6 @@ StructureSpawn.prototype.maintainLocalUpgrader = function() {
       let maxUpgraderCount = this.room.memory.economy.maxUpgraderCount;
 
       limit = limit <= maxUpgraderCount ? limit : maxUpgraderCount;
-    }
-  }
-  else if(!_.isEmpty(containers)) {
-    // TODO: If there are more than one container
-    let containerEnergy = containers[0].store[RESOURCE_ENERGY];
-
-    // TODO: revision
-    if(containerEnergy > 1333) {
-      let upgrader = this.room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.isControlledBy(this.room.controller.id) && c.isRole('upgrader')
-      });
-      // 1333 results from the 'carry + carry * 1/3' condition of logistics (at 500 carryCap)
-      limit = 1 + upgrader.length;
     }
   }
 
@@ -465,7 +466,7 @@ StructureSpawn.prototype.claimColonies = function(claimFlags) {
         if (
           flag.room &&
           flag.room.controller.reservation &&
-          flag.room.controller.reservation.username === ME &&
+          flag.room.controller.reservation.username.toLowerCase() === ME &&
           flag.room.controller.reservation.ticksToEnd > 2000
         ) {
           return creep;

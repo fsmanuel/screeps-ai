@@ -146,6 +146,7 @@ module.exports = {
 
       if(colony.isStronghold()) {
         colony.upgradeDefense(defcon);
+        colony.handleGates();
       }
 
       colony.stationaryFireControl(defcon);

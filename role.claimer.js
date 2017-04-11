@@ -19,5 +19,18 @@ module.exports = function() {
     this.moveTo(target, {
       reusePath: 10
     });
+
+    /*
+    if(this.room.isKeeperRoom()) {
+        this.moveSave(target, {
+          saveZone: 3,
+          reusePath: 10
+        })
+    } else {
+        this.moveTo(target, {
+          reusePath: 10
+        });
+    }
+    */
   }
 };
