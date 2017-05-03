@@ -127,7 +127,10 @@ module.exports = {
         attackFlags
       );
 
+      node.militaryAdministration.attackFlags = attackFlags;
       node.runJobCenter();
+      node.stateAdministration.runBureau();
+
     }, this.tree.traverseDF);
   },
 
@@ -162,216 +165,257 @@ module.exports = {
   attack() {
     // Light Bowman
 
-    this.attackFlags.forEach((flag) => {
-      if(!flag.memory.setUp) {
-        let lightBowmanFlags = this.attackFlags.filter((flag) => {
-          flag.memory.tactic === 'offensiveArcher'
-        });
-        if(flag.memory.tactic === 'offensiveArcher' && !flag.memory.setUp) {
-          // basic setup
-          flag.memory = {
-            tactic : 'offensiveArcher',
-            order : lightBowmanFlags.length + 1,
-            setUp : true,
-            active : false,
-            operate : false,
-            targetFlagName : null,
-            activeUnits : {
-              lightBowman : []
-            },
-            requiredUnits : {
-              lightBowman : 1
-            }
-          }
-        }
-      }
-    });
-
-    // Heavy Bowman
-
-    this.attackFlags.forEach((flag) => {
-      if(!flag.memory.setUp) {
-        let heavyBowmanFlags = this.attackFlags.filter((flag) => {
-          flag.memory.tactic === 'defensivArcher'
-        });
-        if(flag.memory.tactic === 'defensivArcher' && !flag.memory.setUp) {
-          // basic setup
-          flag.memory = {
-            tactic : 'defensivArcher',
-            order : heavyBowmanFlags.length + 1,
-            setUp : true,
-            active : false,
-            operate : false,
-            targetFlagName : null,
-            activeUnits : {
-              heavyBowman : []
-            },
-            requiredUnits : {
-              heavyBowman : 1
-            }
-          }
-        }
-      }
-    });
-
-    // Manguadai
-
-    const timeMangudai = _.random(1500, 2500);
-    everyTicks(timeMangudai, function() {
-      // Game.flags['mangudai_1'].memory.requiredUnits.mangudai = 1;
-      // Game.flags['mangudai_2'].memory.requiredUnits.mangudai = 1;
-    });
-
-    this.attackFlags.forEach((flag) => {
-      // Setup
-      if(!flag.memory.setUp) {
-        // Raid with Mangudai
-        let raidFlags = this.attackFlags.filter((flag) => flag.memory.tactic === 'raid');
-        if(flag.memory.tactic === 'raid' && !flag.memory.setUp) {
-          // basic setup
-          flag.memory = {
-            tactic : 'raid',
-            order : raidFlags.length,
-            setUp : true,
-            active : false,
-            operate : false,
-            targetFlagName : null,
-            victim : ['gastraph'],
-            activeUnits : {
-              mangudai : []
-            },
-            requiredUnits : {
-              mangudai : 1
-            },
-            operationalArea : {},
-            history: []
-          }
-          // detailed setup
-          if(flag.memory.order === 1) {
-            flag.memory.operationalArea = {
-              startBase : ['W83N6'],
-              homeBases : ['W83N6', 'W83N9'],
-              withdrawalRooms : ['W89N6', 'W86N6', 'W85N6', 'W84N6', 'W89N5', 'W88N5', 'W87N5',
-               'W86N5', 'W85N5', 'W90N5', 'W90N6', 'W90N7', 'W90N8', 'W90N9', 'W90N10', 'W89N10',
-               'W88N10', 'W87N10', 'W86N10', 'W85N10', 'W84N10', 'W83N10'],
-              attackRooms : ['W88N9', 'W87N9', 'W85N9', 'W84N9', 'W89N8', 'W88N8', 'W87N8',
-               'W86N8', 'W85N8', 'W89N7', 'W87N7', 'W86N7', 'W85N7', 'W87N6'],
-              enemyBases : ['W89N9', 'W86N9', 'W88N7']
-            }
-          }
-          if(flag.memory.order === 2) {
-            flag.memory.operationalArea = {
-              startBase : ['W83N6'],
-              homeBases : ['W83N6', 'W83N9'],
-              withdrawalRooms : ['W89N6', 'W86N6', 'W85N6', 'W84N6', 'W89N5', 'W88N5', 'W87N5',
-               'W86N5', 'W85N5', 'W90N5', 'W90N6', 'W90N7', 'W90N8', 'W90N9', 'W90N10', 'W89N10',
-               'W88N10', 'W87N10', 'W86N10', 'W85N10', 'W84N10', 'W83N10'],
-              attackRooms : ['W88N9', 'W87N9', 'W85N9', 'W84N9', 'W89N8', 'W88N8', 'W87N8',
-               'W86N8', 'W85N8', 'W89N7', 'W87N7', 'W86N7', 'W85N7', 'W87N6'],
-              enemyBases : ['W89N9', 'W86N9', 'W88N7']
-            }
-          }
-        }
-      // Update Units
-      } else {
-        for(let type in flag.memory.activeUnits) {
-            for(let u in type) {
-                let creepName = flag.memory.activeUnits[type][u];
-                if(!Game.creeps[creepName]) {
-                    flag.memory.activeUnits[type].splice(u, 1);
-                }
-            }
-        }
-      }
-    });
+    // this.attackFlags.forEach((flag) => {
+    //   if(!flag.memory.setUp) {
+    //     let lightBowmanFlags = this.attackFlags.filter((flag) => {
+    //       flag.memory.tactic === 'offensiveArcher'
+    //     });
+    //     if(flag.memory.tactic === 'offensiveArcher' && !flag.memory.setUp) {
+    //       // basic setup
+    //       flag.memory = {
+    //         tactic : 'offensiveArcher',
+    //         order : lightBowmanFlags.length + 1,
+    //         setUp : true,
+    //         active : false,
+    //         operate : false,
+    //         targetFlagName : null,
+    //         activeUnits : {
+    //           lightBowman : []
+    //         },
+    //         requiredUnits : {
+    //           lightBowman : 1
+    //         }
+    //       }
+    //     }
+    //   }
+    // });
+    //
+    // // Heavy Bowman
+    //
+    // this.attackFlags.forEach((flag) => {
+    //   if(!flag.memory.setUp) {
+    //     let heavyBowmanFlags = this.attackFlags.filter((flag) => {
+    //       flag.memory.tactic === 'defensivArcher'
+    //     });
+    //     if(flag.memory.tactic === 'defensivArcher' && !flag.memory.setUp) {
+    //       // basic setup
+    //       flag.memory = {
+    //         tactic : 'defensivArcher',
+    //         order : heavyBowmanFlags.length + 1,
+    //         setUp : true,
+    //         active : false,
+    //         operate : false,
+    //         targetFlagName : null,
+    //         activeUnits : {
+    //           heavyBowman : []
+    //         },
+    //         requiredUnits : {
+    //           heavyBowman : 1
+    //         }
+    //       }
+    //     }
+    //   }
+    // });
+    //
+    // // Manguadai
+    //
+    // const timeMangudai = _.random(1500, 2500);
+    // everyTicks(timeMangudai, function() {
+    //   // Game.flags['mangudai_1'].memory.requiredUnits.mangudai = 1;
+    //   // Game.flags['mangudai_2'].memory.requiredUnits.mangudai = 1;
+    // });
+    //
+    // this.attackFlags.forEach((flag) => {
+    //   // Setup
+    //   if(!flag.memory.setUp) {
+    //     // Raid with Mangudai
+    //     let raidFlags = this.attackFlags.filter((flag) => flag.memory.tactic === 'raid');
+    //     if(flag.memory.tactic === 'raid' && !flag.memory.setUp) {
+    //       // basic setup
+    //       flag.memory = {
+    //         tactic : 'raid',
+    //         order : raidFlags.length,
+    //         setUp : true,
+    //         active : false,
+    //         operate : false,
+    //         targetFlagName : null,
+    //         victim : ['gastraph'],
+    //         activeUnits : {
+    //           mangudai : []
+    //         },
+    //         requiredUnits : {
+    //           mangudai : 1
+    //         },
+    //         operationalArea : {},
+    //         history: []
+    //       }
+    //       // detailed setup
+    //       if(flag.memory.order === 1) {
+    //         flag.memory.operationalArea = {
+    //           startBase : ['W83N6'],
+    //           homeBases : ['W83N6', 'W83N9'],
+    //           withdrawalRooms : ['W89N6', 'W86N6', 'W85N6', 'W84N6', 'W89N5', 'W88N5', 'W87N5',
+    //            'W86N5', 'W85N5', 'W90N5', 'W90N6', 'W90N7', 'W90N8', 'W90N9', 'W90N10', 'W89N10',
+    //            'W88N10', 'W87N10', 'W86N10', 'W85N10', 'W84N10', 'W83N10'],
+    //           attackRooms : ['W88N9', 'W87N9', 'W85N9', 'W84N9', 'W89N8', 'W88N8', 'W87N8',
+    //            'W86N8', 'W85N8', 'W89N7', 'W87N7', 'W86N7', 'W85N7', 'W87N6'],
+    //           enemyBases : ['W89N9', 'W86N9', 'W88N7']
+    //         }
+    //       }
+    //       if(flag.memory.order === 2) {
+    //         flag.memory.operationalArea = {
+    //           startBase : ['W83N6'],
+    //           homeBases : ['W83N6', 'W83N9'],
+    //           withdrawalRooms : ['W89N6', 'W86N6', 'W85N6', 'W84N6', 'W89N5', 'W88N5', 'W87N5',
+    //            'W86N5', 'W85N5', 'W90N5', 'W90N6', 'W90N7', 'W90N8', 'W90N9', 'W90N10', 'W89N10',
+    //            'W88N10', 'W87N10', 'W86N10', 'W85N10', 'W84N10', 'W83N10'],
+    //           attackRooms : ['W88N9', 'W87N9', 'W85N9', 'W84N9', 'W89N8', 'W88N8', 'W87N8',
+    //            'W86N8', 'W85N8', 'W89N7', 'W87N7', 'W86N7', 'W85N7', 'W87N6'],
+    //           enemyBases : ['W89N9', 'W86N9', 'W88N7']
+    //         }
+    //       }
+    //     }
+    //   // Update Units
+    //   } else {
+    //     for(let type in flag.memory.activeUnits) {
+    //         for(let u in type) {
+    //             let creepName = flag.memory.activeUnits[type][u];
+    //             if(!Game.creeps[creepName]) {
+    //                 flag.memory.activeUnits[type].splice(u, 1);
+    //             }
+    //         }
+    //     }
+    //   }
+    // });
 
     // Crusade
-
-    let crusadeFlag = Game.flags['crusade'];
-    let crusadeWithdrawalFlag = Game.flags['crusadeWithdrawal'];
-
-    if(crusadeFlag){
-        if(!crusadeFlag.memory.setUp) {
-            crusadeFlag.memory = {
-                setUp : true,
-                active : false,
-                //goal : 'conquest',
-                tactic : 'sabotageWithDeathblow',
-                tacticalPhase : 1,
-                tacticalWithdrawalTo : 'crusadeWithdrawal',
-                //attackerRooms : ['W83N9', 'W83N8'],
-                //supporterRooms : [],
-                unitTypes : {
-                    pawnSacrifice : [],
-                    melee : []
-                },
-                pawnLimit : 4,
-                meleeLimit : 4
-            }
-        } else {
-            // update
-            for(let type in crusadeFlag.memory.unitTypes) {
-                for(let u in type) {
-                    let creepName = crusadeFlag.memory.unitTypes[type][u];
-                    if(!Game.creeps[creepName]) {
-                        crusadeFlag.memory.unitTypes[type].splice(u, 1);
-                    }
-                }
-            }
-        }
-    }
-
-    // Destroyer
-
-    let destroyFlag = Game.flags['destroy'];
-
-    if(destroyFlag) {
-      if(!destroyFlag.memory.setUp) {
-        destroyFlag.memory =  {
-          setUp : true,
-          active : false,
-          operate : false,
-          tactic : 'destroy',
-          tacticInfo : {
-            targetType : 'ALL',
-            radius : 0
-          },
-          activeUnits : {
-            destroyer : []
-          },
-          requiredUnits : {
-            destroyer : 1
-          },
-          requiredStrength : {
-            destroyer : 'moderate' // low, moderate, high, ultra
-          },
-        }
-      } else {
-        // update
-        for(let type in destroyFlag.memory.activeUnits) {
-          for(let u in type) {
-            let creepName = destroyFlag.memory.activeUnits[type][u];
-            if(!Game.creeps[creepName]) {
-                destroyFlag.memory.activeUnits[type].splice(u, 1);
-            }
-          }
-        }
+    let availableFlags = {
+      crusade: {
+        requiredUnits: {
+          monk: 1,
+          melee: 1,
+        },
+        supplyRooms: [],
+        rescueFlag: true,
+        tactic: 'crusade',
       }
+
     }
+
+    // this.attackFlags
+    //   .filter((flag) => flag.memory.tactic)
+    //   .forEach((flag) => {
+    //     let flagMemory = flag.memory;
+    //     let defaults = {
+    //       active: false,
+    //     };
+    //
+    //     if (_.isEmpty(flagMemory.requiredUnits)) {
+    //       let settings = availableFlags[flagMemory.tactic];
+    //
+    //       if (settings.rescueFlag) {
+    //         // TODO: create flag and add it to the settings.rescueFlag
+    //       }
+    //
+    //       flag.memory = settings;
+    //     } else {
+    //       _(flag.memory.units)
+    //         .forEach((type, units) => {
+    //           units.forEach((creepName) => {
+    //             if (!Game.creeps[creepName]) {
+    //               flag.memory.units[type].splice(creepName, 1);
+    //             }
+    //           });
+    //         });
+    //     }
+    //   });
+    // let crusadeFlag = Game.flags['crusade'];
+    // let crusadeWithdrawalFlag = Game.flags['crusadeWithdrawal'];
+    //
+    // if (crusadeFlag){
+    //   if (!crusadeFlag.memory.setUp) {
+    //     crusadeFlag.memory = {
+    //       active: false,
+    //       phase: 1,
+    //       supplyRooms: [],
+    //       requiredUnits: {
+    //         monk: 1,
+    //         melee: 1,
+    //       },
+    //       // TODO: Remove it
+    //       units: {
+    //         monk: [],
+    //         melee: [],
+    //       },
+    //       setup: true,
+    //       // TODO: should be generated
+    //       rescueFlag: 'crusadeWithdrawal',
+    //     }
+    //   } else {
+    //     // TODO: modify acording to setup
+    //     // Cleanup units
+    //     for(let type in crusadeFlag.memory.unitTypes) {
+    //       for(let u in type) {
+    //         let creepName = crusadeFlag.memory.unitTypes[type][u];
+    //         if (!Game.creeps[creepName]) {
+    //             crusadeFlag.memory.unitTypes[type].splice(u, 1);
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
+
+    // // Destroyer
+    //
+    // let destroyFlag = Game.flags['destroy'];
+    //
+    // if(destroyFlag) {
+    //   if(!destroyFlag.memory.setUp) {
+    //     destroyFlag.memory =  {
+    //       setUp : true,
+    //       active : false,
+    //       operate : false,
+    //       tactic : 'destroy',
+    //       tacticInfo : {
+    //         targetType : 'ALL',
+    //         radius : 0
+    //       },
+    //       activeUnits : {
+    //         destroyer : []
+    //       },
+    //       requiredUnits : {
+    //         destroyer : 1
+    //       },
+    //       requiredStrength : {
+    //         destroyer : 'moderate' // low, moderate, high, ultra
+    //       },
+    //     }
+    //   } else {
+    //     // update
+    //     for(let type in destroyFlag.memory.activeUnits) {
+    //       for(let u in type) {
+    //         let creepName = destroyFlag.memory.activeUnits[type][u];
+    //         if(!Game.creeps[creepName]) {
+    //             destroyFlag.memory.activeUnits[type].splice(u, 1);
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
   },
 
   trade() {
-    let colonys = this.empire();
-    everyTicksFor(50, colonys, function(colonys) {
-
-      colonys.forEach(function(colony){
-        let terminal = colony.terminal;
-
-        if(terminal) {
-          colony.controller.trade();
-        }
-      });
-    });
+    // let colonys = this.empire();
+    // everyTicksFor(50, colonys, function(colonys) {
+    //
+    //   colonys.forEach(function(colony){
+    //     let terminal = colony.terminal;
+    //
+    //     if(terminal) {
+    //       colony.controller.trade();
+    //     }
+    //   });
+    // });
   },
 
   test() {

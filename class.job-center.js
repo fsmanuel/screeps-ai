@@ -13,7 +13,10 @@ module.exports = class JobCenter {
 
     idleSpawns.forEach((spawn) => {
       let job = jobs.shift();
-      // console.log(JSON.stringify(job));
+
+      // if (this.node.room.name === 'W81N1') {
+      //   console.log(JSON.stringify(job));
+      // }
 
       if (job) {
         // TODO: remove empty settings by moving them into options
@@ -33,9 +36,14 @@ module.exports = class JobCenter {
 
   // Returns an array of jobs
   openJobPositions() {
-    let node = this.node;
     // TODO: Add priority
+    // We should think about options to call the administrations more than once but trigger only some job inquireis e.g.:
+    // this.inquire(this, 'jobsFor', 'state-administration', {
+    //   survival: true
+    // });
+
     this.inquire(this, 'jobsFor', 'military-administration');
+    this.inquire(this, 'jobsFor', 'state-administration');
     this.inquire(this, 'jobsFor', 'mining-administration');
 
     // TODO: I guess we don't need the flatten here anymore

@@ -102,11 +102,15 @@ Room.prototype.spawnLevel = function(controllerLevel) {
     8 : 60
   }
 
-  for(let i=controllerLevel; i>0; i--) {
-    if(extensions >= maxExtensionsPerLevel[i]) {
-      return i;
+  let maxExtensions = maxExtensionsPerLevel[controllerLevel];
+
+  // for(let i=controllerLevel; i>0; i--) {
+    if (extensions >= maxExtensions) {
+      return controllerLevel;
+    } else {
+      return controllerLevel - 1
     }
-  }
+  // }
 };
 
 Room.prototype.towers = function() {
@@ -188,8 +192,9 @@ Room.prototype.updateStructuralData = function() {
 
   let mineralContainerId;
   let soloContainerIds;
-  if(!_.isEmpty(this.mineral().nearContainers())) {
-    mineralContainerId = this.mineral().nearContainers()[0].id;
+  let mineral = this.mineral();
+  if(!_.isEmpty(mineral) && !_.isEmpty(mineral.nearContainers())) {
+    mineralContainerId = mineral.nearContainers()[0].id;
 
     soloContainerIds = this.containers()
       .filter((c) => !sourceContainerIds.includes(c.id) && !mineralContainerId.includes(c.id))
@@ -241,6 +246,7 @@ Room.prototype.optimizeSourceContainers = function() {
       if (!containerId) { return; }
 
       let container = Game.getObjectById(containerId);
+      if (!container) { return; }
 
       // Remember to request a lorry if the container is at max capacity for 300 ticks
       this.rememberToFor(
@@ -336,11 +342,17 @@ Room.prototype.upgradeDefense = function(defcon, options={}) {
     }
     else if(maxWallHits < finalWallHits) {
       // get our wall builders
-      let explorers = _.values(Game.creeps).filter((c) => {
-        return c.isRole('explorer')
-          && !c.memory.hasOwnProperty('flagName')
-          && c.memory.controllerId === room.controller.id
-      });
+      let explorers;
+
+      if (room.name === 'W81N3') {
+        explorers = _.values(Game.creeps).filter((c) => c.isRole('explorer'));
+      } else {
+        explorers = _.values(Game.creeps).filter((c) => {
+          return c.isRole('explorer')
+            && !c.memory.hasOwnProperty('flagName')
+            && c.memory.controllerId === room.controller.id
+        });
+      }
 
       // how much can they work
       let theoRepairCapability = 0;
@@ -501,11 +513,15 @@ Room.prototype.casualtys = function() {
 };
 
 Room.prototype.findEnemies = function() {
-  return this.find(FIND_HOSTILE_CREEPS, {
+  if (this._enemies) { return this._enemies; }
+
+  this._enemies = this.find(FIND_HOSTILE_CREEPS, {
      filter: (c) => {
          return (allies.indexOf(c.owner.username.toLowerCase()) === -1);
      }
   });
+
+  return this._enemies;
 }
 
 //TODO: Research

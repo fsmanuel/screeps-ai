@@ -1,99 +1,114 @@
 let actAsDistributor = require('role.distributor');
-let actAsBuilder = require('role.builder');
+
+function isHomeRoom(creep) {
+  let roomName = Game.getObjectById(creep.memory.controllerId).room.name;
+  return creep.room.name === roomName;
+}
+
+function isRemoteRoom(creep) {
+  // TODO: Remove containerId after migration
+  let roomName = Game.getObjectById(
+    creep.memory.targetId || creep.memory.containerId
+  ).room.name;
+  return creep.room.name === roomName;
+}
 
 module.exports = function() {
-  let target;
+  let targets = [];
+  let type = RESOURCE_ENERGY;
 
   /*
    Local - (same room)
   */
 
-  // Define the home
-  let homeName = Game.getObjectById(this.memory.controllerId).room.name;
-  // Define the claim
-  let claimName;
-  let source = Game.getObjectById(this.memory.sourceId);
-  // Only lorries have sourceIds
-  if (source && source.room && this.isRole('lorry')) {
-    claimName = source.room.name;
-  }
+  if (isHomeRoom(this)) {
+    // Mineral
+    let mineral = this.room.mineral();
 
-  // Rooms which are not home or claim become no energy supply
-  // HOME Room
-  if(this.room.name === homeName) {
-    let hasDistributor = function(room) {
-      return !_.isEmpty(room.find(FIND_MY_CREEPS).filter((c) => c.memory.role === 'distributor'));
-    };
+    if (this.carry[mineral.mineralType] > 0) {
+      type = mineral.mineralType;
 
-    let isLocalLogistic = function(creep) {
-      // TODO: refactor
-      let creepsSource = Game.getObjectById(creep.memory.sourceId)
-      return creep.room.find(FIND_SOURCES).includes(creepsSource);
-    }
+      targets.push(() => {
+        return this.room
+          .find(FIND_MY_STRUCTURES, {
+            filter: (s) => {
+              return [
+                  STRUCTURE_STORAGE,
+                  STRUCTURE_TERMINAL,
+                ].includes(s.structureType) &&
+                s.hasCapacity(this.carry[type]);
+            }
+          })[0];
+      });
+    } else {
+      let distributors = this.room
+        .find(FIND_MY_CREEPS)
+        .filter((c) => {
+          return c.memory.task === 'distribute';
+        });
 
-    // act as distributor if creep is local logistic
-    // or for all remote logistics, if there is no distributor in home room
-    if((!hasDistributor(this.room) || isLocalLogistic(this))) {
-      actAsDistributor.call(this);
-    }
-    // transport the energy on fast way
-    else {
-      // TODO: Why returns this snippet realy stange results?
+      // Act as distributor if there is none
+      if (this.memory.task === 'distribute' || _.isEmpty(distributors)) {
+        actAsDistributor.call(this);
+        return;
+      } else {
+        // Targets in range
+        targets.push(() => {
+          let targets = this.pos.findInRange(FIND_MY_STRUCTURES, 1, {
+            filter: (s) => {
+              return [
+                STRUCTURE_SPAWN,
+                STRUCTURE_EXTENSION,
+                STRUCTURE_TOWER
+              ].includes(s.structureType) && s.energy < s.energyCapacity - 49
+            }
+          });
 
-      // only check for targets in range
-      // let test = this.pos.findInRange(FIND_MY_STRUCTURES, 1, {
-      //   filter: (s) => {
-      //     return [
-      //       STRUCTURE_SPAWN,
-      //       STRUCTURE_EXTENSION,
-      //       STRUCTURE_TOWER
-      //     ].includes(s.structureType) && s.energy < s.energyCapacity - 49
-      //   }
-      // }[0]);
+          return this.pos.findClosestByPath(targets);
+        });
 
-      // and bring the energy to storage
-      if(_.isEmpty(target)) {
-        target = this.room.storage;
+        // Storage
+        targets.push(() => this.room.storage);
       }
     }
-  }
-  // CLAIM Room
-  else if(this.room.name === claimName) {
-    // TODO: This needs a complete review
+  } else if (isRemoteRoom(this)) {
+    // Tower
+    targets.push(() => {
+      return this.pos
+        .findClosestByPath(FIND_MY_STRUCTURES, {
+          filter: (s) => {
+            return s.structureType === STRUCTURE_TOWER &&
+              s.energy < s.energyCapacity * s.engergyFactor;
+          }
+        });
+    });
 
-    // Spawns and extensions
-    // if (_.isEmpty(target)) {
-    //   target = this.pos.findClosestByPath(FIND_MY_STRUCTURES, {
-    //     filter: (s) => {
-    //       return [
-    //         STRUCTURE_SPAWN,
-    //         STRUCTURE_EXTENSION,
-    //       ].includes(s.structureType) && s.energy < s.energyCapacity
-    //     }
-    //   });
-    // }
-
-    // fill solo containers with energy
-    const soloContainerIds = this.room.memory.soloContainerIds;
-
-    if (_.isEmpty(target) && !_.isEmpty(soloContainerIds)) {
-      let soloContainers = this.room.containers()
-        .filter((c) => soloContainerIds.includes(c.id));
-
-      target = containerWithCapacity(soloContainers);
-    }
+    // Solo container
+    targets.push(() => {
+      return this.room
+        .containers()
+        .filter((c) => this.room.memory.soloContainerIds.includes(c.id))
+        .find((c) => c.storeCapacity - c.store[RESOURCE_ENERGY] > 500);
+    });
   }
 
+  // TODO: Optimize that we only call the function once
+  let target = targets.find((target) => !_.isEmpty(target()));
+  if (target) { target = target(); }
   /*
    Remote - Long distance (other room)
   */
 
   // Get back to home controller room
-  if (_.isEmpty(target)) {
+  if (!target) {
     let controller = Game.getObjectById(this.memory.controllerId);
 
     // Find the room
-    if (controller && controller.pos && controller.pos.roomName !== this.room.name) {
+    if (
+      controller &&
+      controller.pos &&
+      controller.pos.roomName !== this.room.name
+    ) {
       this.moveTo(controller, {
         reusePath: 10
       });
@@ -103,16 +118,7 @@ module.exports = function() {
   }
 
   // if we have a target lets transfer
-  if (!_.isEmpty(target)) {
-    this.do('transfer', target, RESOURCE_ENERGY);
-  } else {
-    //TODO: why does this make problems?
-    //actAsBuilder.call(this);
+  if (target) {
+    this.do('transfer', target, type);
   }
 };
-
-function containerWithCapacity(containers, amount = 1) {
-  return containers.find(
-    c => c.storeCapacity - c.store[RESOURCE_ENERGY] > amount
-  );
-}

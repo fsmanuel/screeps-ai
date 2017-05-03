@@ -4,13 +4,11 @@ let runList = {
   lorry: require('role.logistics'),
   upgrader: require('role.upgrader'),
   explorer: require('role.explorer'),
-  distributor: require('role.distributor')
 };
 
 let claimerRun = require('role.claimer');
 let defenderRun = require('role.defender');
 let minerRun = require('role.miner');
-let mineralizerRun = require('role.mineralizer');
 
 let monkRun = require('role.monk');
 let meleeRun = require('role.melee');
@@ -32,7 +30,15 @@ Creep.prototype.run = function() {
   let carry = _.sum(this.carry);
 
   // TODO: Every creep has to visit this every tick!
-  this.room.visitPosition(this);
+  // this.room.visitPosition(this);
+
+  // Migrations
+  // TODO: Remove after migration
+  if (this.isRole('distributor')) {
+    this.memory.isLocal = true;
+    this.memory.task = 'distribute';
+    this.memory.role = 'lorry';
+  }
 
   // This roles have special tasks and don't need the working flag
 
@@ -90,12 +96,6 @@ Creep.prototype.run = function() {
     return;
   }
 
-  // Mineralizers don't use the working flag because they don't need energy
-  if (this.isRole('mineralizer')) {
-    mineralizerRun.call(this);
-    return;
-  }
-
   // TODO: Move into setupRun
   if (
     isWorking !== undefined && (
@@ -117,10 +117,11 @@ Creep.prototype.run = function() {
       return;
     }
 
-    if(this.memory.role === 'distributor') {
-      if(this.collectDroppedResource() === OK) {
-        return;
-      }
+    if (
+      ['mining', 'distribute'].includes(this.memory.task) &&
+      this.collectDroppedResource() === OK
+    ) {
+      return;
     }
 
     // Get energy from container and source
@@ -138,23 +139,35 @@ Creep.prototype.run = function() {
 
     // Get energy from container
     } else if (role === 'lorry') {
-      this.getEnergy(true, false, { containerId: this.memory.containerId });
+      let container;
+      let mineral = this.room.mineral();
 
-    // Get energy from container
-    } else if (role === 'distributor') {
-      if(this.room.hasExtractor()) {
-        let mineral = this.room.mineral();
-        let container = mineral.nearContainers()[0];
-        if (
-          container &&
-          container.store[mineral.mineralType] >= this.carryCapacity*(3/4)
-        ) {
-          this.do('withdraw', mineral.nearContainers()[0], mineral.mineralType);
-        } else {
-          this.getEnergy(true, false, { containerId: this.memory.containerId });
-        }
+      if (mineral) {
+        container = mineral.nearContainers()[0];
+      }
+
+      // TODO: Enable this feature to clear your terminal of minerals
+      if (
+        false &&
+        this.memory.task === 'distribute' &&
+        this.room.terminal &&
+        this.room.terminal.store[mineral.mineralType] > 0
+      ) {
+        this.do('withdraw', this.room.terminal, mineral.mineralType);
+      } else if (
+        this.memory.task === 'mining' &&
+        this.memory.isMineral &&
+        this.room.hasExtractor() &&
+        container &&
+        container.store[mineral.mineralType] >= this.carryCapacity
+      ) {
+        this.do('withdraw', container, mineral.mineralType);
       } else {
         this.getEnergy(true, false, { containerId: this.memory.containerId });
+      }
+
+      if (_.sum(this.carry) === this.carryCapacity) {
+        this.memory.working = true;
       }
     }
   }
@@ -177,29 +190,48 @@ Creep.prototype.getEnergy = function(useContainer, useSource, options = {}) {
     if (containerId) {
       container = Game.getObjectById(containerId);
 
+//     this.do('transfer', target, this.room.mineral().mineralType);
+
+      // If terminal is over limit (100000)
+      if (
+        this.memory.task === 'distribute' &&
+        this.room.terminal &&
+        this.room.terminal.store[RESOURCE_ENERGY] > 100000
+      ) {
+        container = this.room.terminal;
+      }
+
     // find closest container
     } else {
       const soloContainerIds = this.room.memory.soloContainerIds;
       let capacity = this.carryCapacity - _.sum(this.carry);
 
-      container = this.pos.findClosestByPath(FIND_STRUCTURES, {
-        filter: (s) => {
-          let match = [
-              STRUCTURE_CONTAINER,
-              STRUCTURE_STORAGE
-            ].includes(s.structureType) && s.store[RESOURCE_ENERGY] >= capacity;
+      if (
+        this.isRole('upgrader') &&
+        this.room.terminal &&
+        this.room.terminal.store[RESOURCE_ENERGY] > 100000
+      ) {
+        container = this.room.terminal;
+      } else {
+        container = this.pos.findClosestByPath(FIND_STRUCTURES, {
+          filter: (s) => {
+            let match = [
+                STRUCTURE_CONTAINER,
+                STRUCTURE_STORAGE
+              ].includes(s.structureType) && s.store[RESOURCE_ENERGY] >= capacity;
 
-          // Only get energy from solo containers
-          if (
-            !['explorer', 'logistics'].includes(this.memory.role) &&
-            s.structureType === STRUCTURE_CONTAINER
-          ) {
-            return match && soloContainerIds.includes(s.id);
-          } else {
-            return match;
+            // Only get energy from solo containers
+            if (
+              !['explorer', 'logistics'].includes(this.memory.role) &&
+              s.structureType === STRUCTURE_CONTAINER
+            ) {
+              return match && soloContainerIds.includes(s.id);
+            } else {
+              return match;
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     // if one was found
@@ -252,7 +284,7 @@ Creep.prototype.collectDroppedEnergy = function() {
 };
 
 Creep.prototype.collectDroppedResource = function() {
-  let mineral = this.pos.findInRange(FIND_DROPPED_RESOURCES, 3)[0];
+  let mineral = this.pos.findInRange(FIND_DROPPED_RESOURCES, 6)[0];
 
   let value = this.carryCapacity / 10;
   value = value > 10 ? value : 10;

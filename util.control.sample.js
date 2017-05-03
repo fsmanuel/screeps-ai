@@ -26,8 +26,10 @@ module.exports = {
       Memory.rooms[colony].defense = Memory.rooms[colony].defense || options;
 
       options = _.assign({
-        reserve: 300000,
+        terminalEnergyBuffer: 100000,
+        storageEnergyReserve: 500000,
         maxUpgraderCount: 3,
+        reserve: 500000, // deprecated use storageEnergyReserve
       }, empire[colony].economy);
       Memory.rooms[colony].economy = Memory.rooms[colony].economy || options;
     }

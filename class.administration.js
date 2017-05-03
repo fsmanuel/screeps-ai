@@ -4,18 +4,28 @@ module.exports = class Administration {
     this._vacancies = [];
   }
 
-  inquire(method, capacity) {
-    if (this._vacancies.length >= capacity) { return; }
-
-    this[method].call(this);
+  get energyCapacityAvailable() {
+    return this.node.room.energyCapacityAvailable;
   }
 
   enqueueJobIfNeeded(role, options, limit, callback) {
+    // Remove targetId and task
+    let ignoredKeys = [
+      'body',
+      'isLocal',
+      'isRemote',
+      'isEnergy',
+      'isMineral',
+      'targetId',
+    ];
+
     let creeps = this.node.creeps.filter(c => c.memory.role === role)
 
-    // We apply all options to the filter
+    // We apply all options without ignoredKeys to the filter
     if (!_.isEmpty(options)) {
-      let keys = Object.keys(options);
+      let keys = Object
+        .keys(options)
+        .filter((key) => !ignoredKeys.includes(key));
 
       creeps = creeps
         .filter((creep) => {
@@ -29,5 +39,28 @@ module.exports = class Administration {
     if (creeps.length < limit) {
       this._vacancies.push({ role, options, callback });
     }
+  }
+
+  inquire(method, capacity, options = {}) {
+    if (this._vacancies.length >= capacity) { return; }
+
+    if (this[method]) {
+      this[method](options);
+    }
+  }
+
+  bodyFor(role, options = {}) {
+    let method = `bodyFor${_.capitalize(role)}`;
+
+    if (this[method]) {
+      return this[method](options);
+    }
+  }
+
+  partsFor(max, cost) {
+    let available = this.energyCapacityAvailable;
+    if (max > available) { max = available; }
+
+    return Math.floor(max / cost);
   }
 }

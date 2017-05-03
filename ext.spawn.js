@@ -25,13 +25,9 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags, att
   newCreep = this.maintainSurvival();
   if (newCreep) { return newCreep; }
 
-  // Distributor
-  newCreep = this.maintainLocalDistributors();
-  if (newCreep) { return newCreep; }
-
   // Military complex (attackFlags)
-  newCreep = this.militaryComplexAttack(attackFlags);
-  if (newCreep) { return newCreep; }
+  // newCreep = this.militaryComplexAttack(attackFlags);
+  // if (newCreep) { return newCreep; }
 
   // Explorer
   newCreep = this.maintainLocalExplorer();
@@ -43,14 +39,6 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags, att
 
   // Builder
   newCreep = this.maintainLocalBuilder();
-  if (newCreep) { return newCreep; }
-
-  // Upgrader
-  newCreep = this.maintainLocalUpgrader();
-  if (newCreep) { return newCreep; }
-
-  // MineralMiner
-  newCreep = this.maintainLocalMineralizer();
   if (newCreep) { return newCreep; }
 
   /*
@@ -71,10 +59,6 @@ StructureSpawn.prototype.autoSpawnCreeps = function(claimFlags, defendFlags, att
   // Remote explorer
   newCreep = this.maintainRemoteExplorer(ownedClaimFlags);
   if (newCreep) { return newCreep; }
-
-  // Remote support
-  // newCreep = this.maintainRemoteSupport(ownedClaimFlags);
-  // if (newCreep) { return newCreep; }
 };
 
 /*
@@ -88,19 +72,11 @@ StructureSpawn.prototype.maintainSurvival = function() {
 
 
   // TODO: We have a problem if 2 lorries are in another room!! We kill ourselfs!
+  // TODO: We no longer have distributors?!
   if (!counts['logistics'] && !counts['lorry'] && !counts['distributor']) {
     // TODO: Use spawnFor?
     return this.createCustomCreep('logistics');
   }
-
-  // If we have a RED flag but no defenders and no tower we help our selfs
-  // if (
-  //   this.hasFlag(COLOR_RED) &&
-  //   counts['defender'] === 0 &&
-  //   !this.room.hasTowers()
-  // ) {
-  //   return this.spawnFor('defender');
-  // }
 };
 
 StructureSpawn.prototype.militaryComplexAttack = function(attackFlags) {
@@ -166,30 +142,6 @@ StructureSpawn.prototype.militaryComplexAttack = function(attackFlags) {
 
           return creep;
         }
-
-        if(flag.memory.active && flag.memory.tactic == 'sabotageWithDeathblow') {
-          limit = flag.memory.monkLimit;
-          if (flag.memory.unitTypes.monk.length < limit) {
-            creep = this.spawnForMilitary('monk', options, limit);
-
-            if (creep) {
-              flag.memory.unitTypes.monk.push(creep);
-              return creep;
-            }
-          }
-
-          limit = flag.memory.meleeLimit;
-          if (flag.memory.unitTypes.melee.length < limit) {
-            creep = this.spawnForMilitary('melee', options, limit);
-
-            if (creep) {
-              flag.memory.unitTypes.melee.push(creep);
-              return creep;
-            }
-          }
-
-          return creep;
-        }
       }, undefined);
     console.log('Support our offensive');
   });
@@ -248,6 +200,7 @@ StructureSpawn.prototype.maintainLocalExplorer = function() {
         return c.memory.controllerId === this.room.controller.id &&
             c.memory.role === 'explorer'
     }).length;
+
     // get the explorers in room
     let roomExplorer = this.room.find(FIND_MY_CREEPS, {
       filter: (c) => {
@@ -269,7 +222,7 @@ StructureSpawn.prototype.maintainLocalExplorer = function() {
     // the stronghold has to build up
     if(!this.room.strongholdCheck('walls')) {
       let storageEnergy = this.room.storage.store[RESOURCE_ENERGY];
-      let energyReserve = this.room.memory.economy.reserve;
+      let energyReserve = this.room.memory.economy.storageEnergyReserve;
 
       if(storageEnergy > energyReserve) {
         if(storageEnergy > energyReserve * 1.5) {
@@ -279,101 +232,9 @@ StructureSpawn.prototype.maintainLocalExplorer = function() {
         limit += this.room.memory.defense.explorerCount;
       }
     }
-
-    // the room is in defense
-    if(this.room.memory.defcon >= 2) {
-      limit += 2;
-    }
   }
 
   return this.spawnFor('explorer', {}, limit);
-};
-
-// Upgrader
-StructureSpawn.prototype.maintainLocalUpgrader = function() {
-  let limit = 0;
-
-  const level = this.room.controller.level;
-  const containers = this.room.controller.nearContainers(4);
-
-  // If we have a container near the controller
-  if(!_.isEmpty(containers)) {
-    everyTicks(100, function() {
-      // TODO: If there are more than one container
-      let containerEnergy = containers[0].store[RESOURCE_ENERGY];
-
-      // TODO: revision
-      if(containerEnergy > 1333) {
-        let upgrader = this.room.find(FIND_MY_CREEPS, {
-          filter: (c) => c.isControlledBy(this.room.controller.id) && c.isRole('upgrader')
-        });
-        // 1333 results from the 'carry + carry * 1/3' condition of logistics (at 500 carryCap)
-        limit = 1 + upgrader.length;
-      }
-    });
-  }
-  // If we have NO container near controller, use the storage
-  else {
-    const storage = this.room.storage;
-
-    if (_.isEmpty(storage)) { return; }
-
-    let storageEnergy = storage.store[RESOURCE_ENERGY];
-    let energyReserve = this.room.memory.economy.reserve;
-
-    if(storageEnergy < energyReserve) { return; }
-
-    // we build at least one upgrader
-    limit = 1;
-
-    // additional upgraders
-    if(level < 8 && storageEnergy > energyReserve) {
-      // everything above the reserve will spawn additional upgraders
-      let energyCapacityAvailable = this.room.energyCapacityAvailable;
-      let upgraderPerformance = (Math.floor((energyCapacityAvailable - (level*2*50))/100))*1500;
-
-      limit += Math.floor((storageEnergy - energyReserve) / upgraderPerformance);
-
-      // but only up to the given count
-      let maxUpgraderCount = this.room.memory.economy.maxUpgraderCount;
-
-      limit = limit <= maxUpgraderCount ? limit : maxUpgraderCount;
-    }
-  }
-
-  return this.spawnFor('upgrader', {}, limit);
-};
-
-// Distributor
-StructureSpawn.prototype.maintainLocalDistributors = function() {
-  // no storage or level 6 --> no distributor
-  if(_.isEmpty(this.room.storage) || this.room.controller.level < 6) { return; }
-  let limit = 1;
-
-  let options = {
-    containerId : this.room.storage.id
-  };
-
-  return this.spawnFor('distributor', options, limit);
-};
-
-// Mineralizer
-StructureSpawn.prototype.maintainLocalMineralizer = function() {
-  if (
-    !this.room.hasExtractor() ||
-    this.room.mineral().mineralAmount === 0 ||
-    !this.room.mineral() ||
-    !this.room.mineral().nearContainers()[0]
-  ) { return; }
-
-  let limit = 1;
-
-  let options = {
-    mineralId : this.room.mineral().id,
-    containerId : this.room.mineral().nearContainers()[0].id
-  };
-
-  return this.spawnFor('mineralizer', options, limit);
 };
 
 /*
@@ -386,14 +247,6 @@ StructureSpawn.prototype.claimColonies = function(claimFlags) {
     return claimFlags
       .reduce((creep, flag) => {
         if (creep) { return creep; }
-
-        // If the flag is owned by another controller we don't care
-        if (
-          flag.memory.controllerId &&
-          flag.memory.controllerId !== this.room.controller.id
-        ) {
-          return creep;
-        }
 
         // If the controller is claimed we don't care
         if (
@@ -445,60 +298,32 @@ StructureSpawn.prototype.maintainRemoteExplorer = function(claimFlags) {
 
         // If flag secondary is GREEN => increase
         if (flag.secondaryColor === COLOR_GREEN) {
-          limit += 1;
+          // limit += 1;
 
           // If we have no spawns => increase
           if (!flag.room.hasSpawns()) {
             limit += 1;
           }
 
-          // If we have less then 5 extensions => increase
-          if (!flag.room.hasExtensions(5)) {
-            limit += 1;
-          }
+          // // If we have less then 5 extensions => increase
+          // if (!flag.room.hasExtensions(5)) {
+          //   limit += 1;
+          // }
+          //
+          // // If we have less then 10 extensions => increase
+          // if (!flag.room.hasExtensions(10)) {
+          //   limit += 1;
+          // }
+        }
 
-          // If we have less then 10 extensions => increase
-          if (!flag.room.hasExtensions(10)) {
-            limit += 1;
-          }
+        if (flag.room.name === 'W81N3') {
+          limit = 1;
         }
 
         return this.spawnFor('explorer', options, limit);
       }, undefined);
   });
 };
-
-// Support / Boost
-StructureSpawn.prototype.maintainRemoteSupport = function(claimFlags) {
-  return everyTicks(10, () => {
-    return claimFlags
-      .reduce((creep, flag) => {
-        if (creep) { return creep; }
-        if (!flag.room) { return creep; }
-
-        const level = this.room.controller.level;
-        let limit = 0;
-
-        if (level === 8) {
-          // We support a claimed colony with 3 containers with 1 transport lorry
-          if (flag.secondaryColor === COLOR_GREEN) {
-            limit = 1;
-          }
-
-          let options = {
-            containerId: this.room.storage.id,
-            targetRoom: flag.room.name
-          };
-
-          // console.log(options.controllerId, limit);
-
-          // console.log(this.name, 'support');
-          return this.spawnFor('lorry', options, limit);
-        }
-      }, undefined);
-  });
-};
-
 
 /*
  Helpers
@@ -576,20 +401,27 @@ StructureSpawn.prototype.bodyFor = function(role, options, setting) {
   // Upgrader
   } else if (role === 'upgrader') {
     let spawnLevel = this.room.spawnLevel(level);
-    let secundary = spawnLevel;
+    let utility = spawnLevel * 2;
 
-    let primary = Math.floor((energyCapacityAvailable - (spawnLevel * 2 * 50)) / 100);
+    let work = Math.floor(
+      (energyCapacityAvailable - (utility * 50)) / 100
+    );
+
+    if (work + utility > 50) {
+      work = 50 - utility;
+    }
+
     // at level 8 we need only 15 WORK parts
-    primary = spawnLevel === 8 ? 15 : primary;
-
-    if(primary + secundary * 2 > 50) { primary = 50 - secundary * 2; }
+    if (level === 8) {
+      work = 15;
+    }
 
     body = [];
-    for (let i = 0; i < primary; i++) {
+    for (let i = 0; i < work; i++) {
       body.push(WORK);
     }
 
-    for (let i = 0; i < secundary; i++) {
+    for (let i = 0; i < spawnLevel; i++) {
       body.push(CARRY);
       body.push(MOVE)
     }
@@ -603,168 +435,6 @@ StructureSpawn.prototype.bodyFor = function(role, options, setting) {
     // If we can build the bigger creap we do
     } else {
       body = [CLAIM, CLAIM, MOVE, MOVE]; // 1300
-    }
-
-  // Defender
-  } else if (role === 'defender') {
-    // Max energy
-    let energy = 1160;
-    if (energy > energyCapacityAvailable) {
-      energy = energyCapacityAvailable;
-    }
-
-    // A TOUGH ATTACK(er) which is fast (twice MOVE than other parts)
-    parts = Math.floor(energy / 290);
-
-    body = [];
-    for (let i = 0; i < parts; i++) {
-      body.push(TOUGH);
-    }
-    // COMMIT: better positioning of attack parts (fight until the end)
-    // TODO: code it pirx!
-
-    // Even on swamp we have a walk time of 3
-    for (let i = 0; i < parts * 2; i++) {
-      body.push(MOVE);
-    }
-
-    for (let i = 0; i < parts; i++) {
-      body.push(ATTACK);
-    }
-
-  // Lorries
-  // TODO: We could make long distance lorries bigger and reduce the number to 1?
-  } else if (role === 'lorry') {
-    // TODO: move in creeps helper
-    let sourceRoom = Game.getObjectById(options.sourceId).room;
-    let isRemoteLorry = !_.isEqual(this.room, sourceRoom);
-
-    // Max energy
-    let energy = 750;
-    if(level == 6 && isRemoteLorry) { energy = 1050; }
-    if(level >= 7 && isRemoteLorry) { energy = 2500; }
-
-    if (energy > energyCapacityAvailable) {
-      energy = energyCapacityAvailable;
-    }
-
-    // Create a body with twice as many CARRY as MOVE parts
-    parts = Math.floor(energy / 150);
-
-    body = [];
-    for (let i = 0; i < parts * 2; i++) {
-      body.push(CARRY);
-      if (i < parts) { body.push(MOVE); }
-    }
-
-  // Miner
-  } else if (role === 'miner') {
-    // 350
-    let workParts = [WORK, WORK, WORK];
-    let moveParts = [MOVE];
-
-    if (energyCapacityAvailable >= 450) { workParts.push(WORK); }
-    if (energyCapacityAvailable >= 550) { workParts.push(WORK); }
-
-    // Perfect mining reached - we make it faster
-    if (energyCapacityAvailable >= 600) { moveParts.push(MOVE); }
-    if (energyCapacityAvailable >= 650) { moveParts.push(MOVE); }
-
-    // TODO: Make it distributed [WORK, MOVE, WORK, ...]
-    body = workParts.concat(moveParts);
-
-  // TODO: remote explorer (options.flagName) need to have ATTACK
-  // } else if (role === 'explorer') {
-
-  // Distributor
-  } else if (role === 'distributor') {
-    // Max energy
-    let energy = 750;
-    if(_.inRange(level, 6, 7)) {
-      if(this.room.hasExtractor() && this.room.mineral().mineralAmount > 0) {
-        energy = 2100;
-      } else {
-        energy = 1050;
-      }
-    } else if(level === 8) {
-      energy = 2500;
-    }
-
-    if (energy > energyCapacityAvailable) {
-      energy = energyCapacityAvailable;
-    }
-
-    // Create a body with twice as many CARRY as MOVE parts
-    parts = Math.floor(energy / 150);
-
-    body = [];
-    for (let i = 0; i < parts * 2; i++) {
-      body.push(CARRY);
-      if (i < parts) { body.push(MOVE); }
-    }
-
-  // Mineralizer
-  } else if (role === 'mineralizer') {
-    let energy = energyCapacityAvailable;
-    if(energy > 4500) { energy = 4500; }
-
-    parts = Math.floor(energy / 450);
-
-    body = [];
-    for (let i = 0; i < parts; i++) {
-      body.push(WORK);
-      body.push(WORK);
-      body.push(WORK);
-      body.push(WORK);
-      body.push(MOVE);
-    }
-
-  // Monk
-  } else if (role === 'monk') {
-    // Max energy
-    let energy = 2140;
-    if (energy > energyCapacityAvailable) {
-      energy = energyCapacityAvailable;
-    }
-
-    // A monk to absorb energy from towers
-    //parts = Math.floor(energy / 70);
-
-    body = [];
-    for (let i = 0; i < 2; i++) {
-      body.push(TOUGH);
-    }
-
-    // Even on swamp we have a walk time of 3
-    for (let i = 0; i < 10; i++) {
-      body.push(MOVE);
-    }
-
-    for (let i = 0; i < 6; i++) {
-      body.push(HEAL);
-    }
-
-    for (let i = 0; i < 2; i++) {
-      body.push(RANGED_ATTACK);
-    }
-
-
-  // Melee
-  } else if (role === 'melee') {
-    // A light armored melee
-    let armor = 5; // 2 // one cost: 70
-    let attack = 10; // 5 // one cost: 130
-
-    body = [];
-    for (let i = 0; i < armor; i++) {
-      body.push(TOUGH);
-      body.push(MOVE);
-    }
-
-    // Even on swamp we have a walk time of 3
-    for (let i = 0; i < attack; i++) {
-      body.push(MOVE);
-      body.push(ATTACK);
     }
 
   // Destroyer
@@ -893,7 +563,7 @@ StructureSpawn.prototype.bodyFor = function(role, options, setting) {
     if (role === 'logistics') {
       this.rememberTo(
         () => energyForBalancedCreep = energyAvailable,
-        energyForBalancedCreep > energyCapacityAvailable,
+        energyForBalancedCreep > energyAvailable,
         {
           key: 'emergency',
           limit: 50
@@ -936,6 +606,14 @@ StructureSpawn.prototype.createCustomCreep = function(role, options = {}, settin
   if (this.spawning) { return; }
 
   const creepName = this.creepName(role);
+
+  let body;
+
+  if (options.body) {
+    body = options.body;
+    delete options.body;
+  }
+
   // TODO: Only set working property if needed
   // not for claimer, defender and miner
   const memory = _.assign({
@@ -943,20 +621,24 @@ StructureSpawn.prototype.createCustomCreep = function(role, options = {}, settin
     working: false,
     controllerId: this.room.controller.id
   }, options);
-  const body = this.bodyFor(role, memory, setting);
 
+  // Remove it as soon as we got rid of bodyFor
+  if (!body) {
+    body = this.bodyFor(role, memory, setting);
+  }
 
   let msg = `${this.name} - `;
   let creep = null;
   let canCreate = this.canCreateCreep(body, creepName);
+  // console.log(role, canCreate);
 
   // Spawn
   if (canCreate === OK) {
-    msg += 'Spawning new ' + role + ': ' + creepName;
+    msg += `Spawning new ${role}: ${creepName}`; // - ${body}
     creep = this.createCreep(body, creepName, memory);
 
     if (callback) {
-      callback();
+      callback(creep);
     }
 
     Logger.log(msg); // , body, JSON.stringify(memory)
